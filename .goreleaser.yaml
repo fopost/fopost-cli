@@ -1,0 +1,74 @@
+version: 2
+
+project_name: fopost
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: fopost
+    main: .
+    binary: fopost
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/fopost/fopost-cli/internal/buildinfo.Version={{ .Version }}
+      - -X github.com/fopost/fopost-cli/internal/buildinfo.Commit={{ .FullCommit }}
+      - -X github.com/fopost/fopost-cli/internal/buildinfo.Date={{ .Date }}
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: fopost
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+
+release:
+  github:
+    owner: fopost
+    name: fopost-cli
+  draft: false
+  prerelease: auto
+  footer: |
+    Docs: https://fopost.com/docs · Issues: https://github.com/fopost/fopost-cli/issues
+
+brews:
+  - name: fopost
+    # The tap repository must exist before the first release.
+    repository:
+      owner: fopost
+      name: homebrew-tap
+      token: '{{ .Env.HOMEBREW_TAP_TOKEN }}'
+    directory: Formula
+    homepage: https://fopost.com
+    description: Schedule and publish social media content from your terminal
+    license: MIT
+    test: |
+      system "#{bin}/fopost", "version"
+    install: |
+      bin.install "fopost"
+      generate_completions_from_executable(bin/"fopost", "completion")
