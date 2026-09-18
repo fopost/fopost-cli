@@ -5,7 +5,7 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 ## What This Is
 
 `github.com/fopost/fopost-cli` — the official FoPost command-line interface. It
-builds a single static binary named `fopost` (version 0.1.0) that wraps the
+builds a single static binary named `fopost` (version 0.1.1) that wraps the
 official Go SDK, `github.com/fopost/fopost-go`. It is distributed through a
 Homebrew tap, GitHub Releases, and `go install`; it is not a library and exports
 no public API.
@@ -115,7 +115,7 @@ go vet ./...
 gofmt -l .                     # must print nothing
 go run . --help                # try the CLI without installing it
 
-go build -ldflags "-X github.com/fopost/fopost-cli/internal/buildinfo.Version=0.1.0" -o fopost .
+go build -ldflags "-X github.com/fopost/fopost-cli/internal/buildinfo.Version=0.1.1" -o fopost .
 ```
 
 Tests never reach the network. They run the real cobra tree in-process through

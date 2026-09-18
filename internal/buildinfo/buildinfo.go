@@ -5,7 +5,7 @@ import "runtime/debug"
 
 // Overridden at build time with -ldflags "-X ...buildinfo.Version=1.2.3".
 var (
-	Version = "0.1.0"
+	Version = "0.1.1"
 	Commit  = ""
 	Date    = ""
 )
