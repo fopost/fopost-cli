@@ -58,7 +58,6 @@ release:
 
 brews:
   - name: fopost
-    # The tap repository must exist before the first release.
     repository:
       owner: fopost
       name: homebrew-tap

@@ -43,7 +43,7 @@ Grab the archive for your platform from the
 `checksums.txt`, and put `fopost` on your `PATH`:
 
 ```bash
-tar -xzf fopost_0.1.0_darwin_arm64.tar.gz
+tar -xzf fopost_0.1.1_darwin_arm64.tar.gz
 sudo mv fopost /usr/local/bin/
 fopost version
 ```
