@@ -213,6 +213,8 @@ fopost posts         list · get · create · publish · cancel · delete
                      duplicate · preflight · deliveries
 fopost media         list · upload · delete
 fopost labels        list · create · delete
+fopost contacts      list · get · conversations · import · delete
+                     fields list · fields delete
 fopost analytics     overview · top-posts · time-series
 fopost automations   list · get · toggle · trigger · runs
 fopost webhooks      list · create · test · delete
