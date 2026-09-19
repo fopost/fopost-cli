@@ -172,6 +172,7 @@ func newPostsGetCmd(state *State) *cobra.Command {
 
 type createOptions struct {
 	accounts   []string
+	group      string
 	text       string
 	textFile   string
 	media      []string
@@ -209,7 +210,8 @@ func newPostsCreateCmd(state *State) *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.StringArrayVar(&opts.accounts, "account", nil, "account id to post to (repeatable, at least one required)")
+	flags.StringArrayVar(&opts.accounts, "account", nil, "account id to post to (repeatable; this or --group is required)")
+	flags.StringVar(&opts.group, "group", "", "account group id; posts to every account in it")
 	flags.StringVar(&opts.text, "text", "", "post text")
 	flags.StringVar(&opts.textFile, "text-file", "", "read the post text from a file, or \"-\" for stdin")
 	flags.StringArrayVar(&opts.media, "media", nil, "local file to upload and attach (repeatable)")
@@ -222,8 +224,8 @@ func newPostsCreateCmd(state *State) *cobra.Command {
 }
 
 func runPostsCreate(cmd *cobra.Command, state *State, opts *createOptions) error {
-	if len(opts.accounts) == 0 {
-		return usageErrorf("at least one --account is required")
+	if len(opts.accounts) == 0 && opts.group == "" {
+		return usageErrorf("at least one --account or a --group is required")
 	}
 	if opts.publish && opts.scheduleAt != "" {
 		return usageErrorf("--publish and --schedule-at are alternatives; pass one")
@@ -269,11 +271,12 @@ func runPostsCreate(cmd *cobra.Command, state *State, opts *createOptions) error
 	}
 
 	body := &fopost.CreatePostRequest{
-		WorkspaceID: workspaceID,
-		Accounts:    opts.accounts,
-		Content:     []fopost.ContentBlock{block},
-		Labels:      opts.labels,
-		Status:      fopost.PostStatusDraft,
+		WorkspaceID:    workspaceID,
+		Accounts:       opts.accounts,
+		AccountGroupID: opts.group,
+		Content:        []fopost.ContentBlock{block},
+		Labels:         opts.labels,
+		Status:         fopost.PostStatusDraft,
 	}
 	if opts.title != "" {
 		body.Title = fopost.String(opts.title)
