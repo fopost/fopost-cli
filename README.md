@@ -106,6 +106,8 @@ fopost posts deliveries post_7d2a
 `--schedule-at` reads RFC 3339 (`2026-09-01T09:00:00Z`) or a plain
 `"2026-09-01 09:00"` in your local timezone. Files passed with `--media` are
 uploaded to the workspace's media library first, then attached.
+`fopost media upload --direct <file>` sends each file straight to storage
+through a presigned URL instead of through the API.
 
 To send something out now, create and publish in one step:
 

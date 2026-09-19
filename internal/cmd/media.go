@@ -2,7 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"mime"
+	"os"
+	"path/filepath"
 
+	"github.com/fopost/fopost-go"
 	"github.com/spf13/cobra"
 
 	"github.com/fopost/fopost-cli/internal/output"
@@ -56,7 +60,8 @@ func newMediaListCmd(state *State) *cobra.Command {
 }
 
 func newMediaUploadCmd(state *State) *cobra.Command {
-	return &cobra.Command{
+	var direct bool
+	cmd := &cobra.Command{
 		Use:   "upload <file> [file...]",
 		Short: "Upload local files to the media library",
 		Args:  cobra.MinimumNArgs(1),
@@ -69,7 +74,12 @@ func newMediaUploadCmd(state *State) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			uploaded, err := uploadFiles(cmd, client, workspaceID, args)
+			var uploaded []fopost.UploadedMedia
+			if direct {
+				uploaded, err = uploadFilesDirect(cmd, client, workspaceID, args)
+			} else {
+				uploaded, err = uploadFiles(cmd, client, workspaceID, args)
+			}
 			if err != nil {
 				return err
 			}
@@ -83,6 +93,29 @@ func newMediaUploadCmd(state *State) *cobra.Command {
 			})
 		},
 	}
+	cmd.Flags().BoolVar(&direct, "direct", false, "upload each file straight to storage through a presigned URL")
+	return cmd
+}
+
+// uploadFilesDirect presigns, PUTs, and completes one file at a time.
+func uploadFilesDirect(cmd *cobra.Command, client *fopost.Client, workspaceID string, paths []string) ([]fopost.UploadedMedia, error) {
+	uploaded := make([]fopost.UploadedMedia, 0, len(paths))
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("reading %s: %w", path, err)
+		}
+		mimeType := mime.TypeByExtension(filepath.Ext(path))
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
+		}
+		asset, err := client.Media.UploadDirect(cmd.Context(), workspaceID, filepath.Base(path), mimeType, data)
+		if err != nil {
+			return nil, err
+		}
+		uploaded = append(uploaded, *asset)
+	}
+	return uploaded, nil
 }
 
 func newMediaDeleteCmd(state *State) *cobra.Command {
