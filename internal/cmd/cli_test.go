@@ -459,3 +459,81 @@ func TestVersionReportsTheCLIAndSDK(t *testing.T) {
 		t.Fatalf("version = %+v, want both the CLI and SDK versions", info)
 	}
 }
+
+func TestMediaUploadDirectPresignsPutsAndCompletes(t *testing.T) {
+	isolate(t)
+
+	mediaFile := filepath.Join(t.TempDir(), "card.png")
+	if err := os.WriteFile(mediaFile, []byte("\x89PNG\r\n\x1a\n fake"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var api *fakeAPI
+	var putKey, putType string
+	var putLength int64
+	api = newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/media/presign":
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+				"uploadId":  "up_1",
+				"uploadUrl": api.URL + "/blob/up_1",
+				"method":    "PUT",
+				"headers":   map[string]string{"Content-Type": "image/png"},
+				"expiresAt": "2026-09-19T12:00:00Z",
+			}})
+		case r.Method == http.MethodPut && r.URL.Path == "/blob/up_1":
+			putKey, putType, putLength = r.Header.Get("X-API-Key"), r.Header.Get("Content-Type"), r.ContentLength
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodPost && r.URL.Path == "/media/presign/up_1/complete":
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+				"id": "med_1", "type": "image", "name": "card.png", "url": "https://cdn.example/card.png", "size": 13,
+			}})
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"error":"not_found","message":"no"}`))
+		}
+	})
+
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL, Workspace: "ws_1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "media", "upload", "--direct", mediaFile, "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+
+	want := []string{"POST /media/presign", "PUT /blob/up_1", "POST /media/presign/up_1/complete"}
+	got := api.paths()
+	if len(got) != len(want) {
+		t.Fatalf("requests = %v, want %v", got, want)
+	}
+	for index, path := range want {
+		if got[index] != path {
+			t.Fatalf("request %d = %q, want %q (full order: %v)", index, got[index], path, got)
+		}
+	}
+
+	presign := api.find(t, http.MethodPost, "/media/presign")
+	if presign.Body["workspaceId"] != "ws_1" || presign.Body["filename"] != "card.png" {
+		t.Fatalf("presign body = %v", presign.Body)
+	}
+	if presign.Body["mimeType"] != "image/png" || presign.Body["size"] != float64(13) {
+		t.Fatalf("presign body = %v, want the detected type and exact size", presign.Body)
+	}
+	if putKey != "" {
+		t.Fatalf("the PUT carried the API key")
+	}
+	if putType != "image/png" || putLength != 13 {
+		t.Fatalf("PUT type = %q length = %d, want image/png and the file's 13 bytes", putType, putLength)
+	}
+
+	var result []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("--json output is not valid JSON: %v\n%s", err, stdout)
+	}
+	if len(result) != 1 || result[0]["id"] != "med_1" {
+		t.Fatalf("result = %v, want the completed asset", result)
+	}
+}
