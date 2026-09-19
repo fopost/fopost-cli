@@ -695,3 +695,54 @@ func TestAccountsTelegramCommandsClearSkipsPromptWithYes(t *testing.T) {
 	}
 	api.find(t, http.MethodDelete, "/accounts/acc_1/telegram/commands")
 }
+
+func TestAccountsSlackChannelsEmitsJSON(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"id": "C1", "name": "general", "is_private": false, "is_member": true, "is_current": true}}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "accounts", "slack", "channels", "acc_1", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	api.find(t, http.MethodGet, "/accounts/acc_1/slack/channels")
+	if !strings.Contains(stdout, `"is_current": true`) {
+		t.Fatalf("stdout = %q", stdout)
+	}
+}
+
+func TestAccountsSlackSetIdentitySendsOnlyPassedFields(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"username": nil, "icon_url": nil, "icon_emoji": ":rocket:"}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, code := run(t, "", "accounts", "slack", "set-identity", "acc_1", "--icon-url", "https://example.com/a.png", "--icon-emoji", ":rocket:"); code != ExitUsage {
+		t.Fatalf("exit = %d, want %d", code, ExitUsage)
+	}
+	if len(api.paths()) != 0 {
+		t.Fatalf("the CLI called %v despite a usage error", api.paths())
+	}
+
+	_, stderr, code := run(t, "", "accounts", "slack", "set-identity", "acc_1", "--clear-username", "--icon-emoji", ":rocket:", "--quiet")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodPatch, "/accounts/acc_1/slack/identity")
+	if v, ok := sent.Body["username"]; !ok || v != nil {
+		t.Fatalf("username = %v (present %v), want null", v, ok)
+	}
+	if sent.Body["icon_emoji"] != ":rocket:" {
+		t.Fatalf("icon_emoji = %v", sent.Body["icon_emoji"])
+	}
+	if _, ok := sent.Body["icon_url"]; ok {
+		t.Fatalf("icon_url was sent: %v", sent.Body)
+	}
+}
