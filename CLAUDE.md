@@ -97,9 +97,7 @@ Changing one is a breaking change for anyone's script.
 ## Parent dependency
 
 `github.com/fopost/fopost-go` is **published** to the Go module proxy, so CI
-resolves it normally with no shim. It is currently pinned to a pseudo-version
-because the SDK has no `v*` tag yet; once it is tagged, bump `go.mod` to the
-released version.
+resolves it normally with no shim. `go.mod` requires the tagged `v0.2.0`.
 
 `go.mod` declares `go 1.22`, which is why `golang.org/x/term` is pinned to
 `v0.27.0` — from `v0.34.0` it requires a newer toolchain. CI builds on 1.22 and
