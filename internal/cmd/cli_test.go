@@ -627,3 +627,123 @@ func TestAccountsMoveBlockedExitsWithAnError(t *testing.T) {
 		t.Fatalf("workspace_id = %v", moved.Body["workspace_id"])
 	}
 }
+
+func TestAdsTreeSendsTheConnectionAndPrintsEveryLevel(t *testing.T) {
+	isolate(t)
+	var query string
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+			"adAccountId": "act_1",
+			"campaigns": []any{map[string]any{
+				"id": "c_1", "name": "Launch", "status": "ACTIVE", "budgetMinor": nil,
+				"adSets": []any{map[string]any{
+					"id": "s_1", "name": "US", "status": "ACTIVE", "budgetMinor": 5000,
+					"ads": []any{map[string]any{"id": "a_1", "name": "Hero", "status": "PAUSED"}},
+				}},
+			}},
+		}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL, Workspace: "ws_1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, code := run(t, "", "ads", "tree", "act_1"); code != ExitUsage {
+		t.Fatalf("exit = %d without --connection, want %d", code, ExitUsage)
+	}
+	stdout, stderr, code := run(t, "", "ads", "tree", "act_1", "--connection", "conn_1")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	api.find(t, http.MethodGet, "/ads/accounts/act_1/tree")
+	if query != "connection_id=conn_1&workspace_id=ws_1" {
+		t.Fatalf("query = %q", query)
+	}
+	for _, want := range []string{"c_1", "s_1", "a_1", "50.00"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("tree output is missing %q:\n%s", want, stdout)
+		}
+	}
+}
+
+func TestAdsPauseSendsEveryObjectWithItsLevel(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": []any{
+			map[string]any{"id": "c_1", "level": "campaign", "ok": true},
+			map[string]any{"id": "a_1", "level": "ad", "ok": true},
+		}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL, Workspace: "ws_1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, code := run(t, "", "ads", "pause", "--connection", "conn_1"); code != ExitUsage {
+		t.Fatalf("exit = %d with no objects, want %d", code, ExitUsage)
+	}
+	if len(api.paths()) != 0 {
+		t.Fatalf("the CLI called %v despite a usage error", api.paths())
+	}
+
+	_, stderr, code := run(t, "", "ads", "pause", "--connection", "conn_1", "--campaign", "c_1", "--ad", "a_1", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodPost, "/ads/status")
+	objects, _ := sent.Body["objects"].([]any)
+	if sent.Body["status"] != "paused" || sent.Body["workspaceId"] != "ws_1" || len(objects) != 2 {
+		t.Fatalf("body = %v", sent.Body)
+	}
+	if first, _ := objects[0].(map[string]any); first["level"] != "campaign" {
+		t.Fatalf("objects = %v", objects)
+	}
+}
+
+func TestAdsInsightsPassesTheRangeAndBreakdown(t *testing.T) {
+	isolate(t)
+	var query string
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"objectId": "c_1", "totals": map[string]any{"impressions": 10}}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, code := run(t, "", "ads", "insights", "c_1", "--connection", "conn_1", "--since", "2026-09-01", "--until", "2026-09-07", "--breakdown", "weekday"); code != ExitUsage {
+		t.Fatalf("exit = %d for an unknown breakdown, want %d", code, ExitUsage)
+	}
+	_, stderr, code := run(t, "", "ads", "insights", "c_1", "--connection", "conn_1", "--since", "2026-09-01", "--until", "2026-09-07", "--breakdown", "age", "--daily", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	if query != "breakdown=age&connection_id=conn_1&daily=true&object_id=c_1&since=2026-09-01&until=2026-09-07" {
+		t.Fatalf("query = %q", query)
+	}
+}
+
+func TestAdsLeadsPassesTheCursorAndPrintsTheNextOne(t *testing.T) {
+	isolate(t)
+	var query string
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+			"leads":      []any{map[string]any{"id": "l_1", "fields": []any{map[string]any{"name": "full_name", "values": []string{"Morgan Lee"}}}}},
+			"nextCursor": "cur_2",
+		}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "ads", "leads", "--cursor", "cur_1", "--limit", "25")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	if query != "cursor=cur_1&limit=25" {
+		t.Fatalf("query = %q", query)
+	}
+	if !strings.Contains(stdout, "cur_2") {
+		t.Fatalf("output is missing the next cursor:\n%s", stdout)
+	}
+}
