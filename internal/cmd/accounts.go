@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"strings"
+
+	fopost "github.com/fopost/fopost-go"
 	"github.com/spf13/cobra"
 
 	"github.com/fopost/fopost-cli/internal/output"
@@ -17,6 +20,8 @@ func newAccountsCmd(state *State) *cobra.Command {
 	cmd.AddCommand(
 		newAccountsListCmd(state),
 		newAccountsGetCmd(state),
+		newAccountsRenameCmd(state),
+		newAccountsMoveCmd(state),
 		newAccountsHealthCmd(state),
 		newAccountsValidateCmd(state),
 		newAccountsRefreshCmd(state),
@@ -25,6 +30,7 @@ func newAccountsCmd(state *State) *cobra.Command {
 }
 
 func newAccountsListCmd(state *State) *cobra.Command {
+	var group string
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List connected accounts",
@@ -39,7 +45,10 @@ func newAccountsListCmd(state *State) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			accounts, err := client.Accounts.List(cmd.Context(), resolved.Workspace)
+			accounts, err := client.Accounts.ListWithParams(cmd.Context(), &fopost.ListAccountsParams{
+				WorkspaceID: resolved.Workspace,
+				GroupID:     group,
+			})
 			if err != nil {
 				return err
 			}
@@ -60,6 +69,7 @@ func newAccountsListCmd(state *State) *cobra.Command {
 			})
 		},
 	}
+	cmd.Flags().StringVar(&group, "group", "", "only accounts in this account group")
 	return cmd
 }
 
@@ -84,12 +94,82 @@ func newAccountsGetCmd(state *State) *cobra.Command {
 					{"Platform", account.Platform},
 					{"Username", output.Dash(account.Username)},
 					{"Name", output.Dash(account.Name)},
+					{"Platform Name", output.Dash(account.PlatformName)},
 					{"Workspace", account.Workspace.Name + " (" + account.WorkspaceID + ")"},
 					{"Connected", output.Stamp(account.CreatedAt.Time, account.CreatedAt.Raw)},
 				})
 			})
 		},
 	}
+}
+
+func newAccountsRenameCmd(state *State) *cobra.Command {
+	var reset bool
+	cmd := &cobra.Command{
+		Use:   "rename <account-id> [display-name]",
+		Short: "Set the name shown for an account, or restore the platform name",
+		Example: strings.Join([]string{
+			"  fopost accounts rename acc_1 \"Client A\"",
+			"  fopost accounts rename acc_1 --reset",
+		}, "\n"),
+		Args: cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := ""
+			if len(args) == 2 {
+				name = strings.TrimSpace(args[1])
+			}
+			if reset && name != "" {
+				return usageErrorf("a display name and --reset are alternatives; pass one")
+			}
+			if !reset && name == "" {
+				return usageErrorf("a display name is required, or --reset to restore the platform name")
+			}
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			renamed, err := client.Accounts.Rename(cmd.Context(), args[0], name)
+			if err != nil {
+				return err
+			}
+			printer := state.Printer()
+			return printer.Value(renamed, func() {
+				printer.Success("Account %s is now shown as %s.", renamed.ID, renamed.Name)
+			})
+		},
+	}
+	cmd.Flags().BoolVar(&reset, "reset", false, "restore the platform name")
+	return cmd
+}
+
+func newAccountsMoveCmd(state *State) *cobra.Command {
+	var to string
+	cmd := &cobra.Command{
+		Use:   "move <account-id>",
+		Short: "Move an account to another workspace you own",
+		Long: "Moves the account, its connection, and its inbox and analytics history to another\n" +
+			"workspace. The account leaves its account groups.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if to == "" {
+				return usageErrorf("--to is required")
+			}
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			moved, err := client.Accounts.Move(cmd.Context(), args[0], to)
+			if err != nil {
+				return err
+			}
+			printer := state.Printer()
+			return printer.Value(moved, func() {
+				printer.Success("Moved account %s to workspace %s.", moved.ID, moved.WorkspaceID)
+			})
+		},
+	}
+	cmd.Flags().StringVar(&to, "to", "", "target workspace id (required)")
+	return cmd
 }
 
 func newAccountsHealthCmd(state *State) *cobra.Command {
