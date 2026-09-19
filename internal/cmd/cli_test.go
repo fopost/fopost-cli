@@ -537,3 +537,93 @@ func TestMediaUploadDirectPresignsPutsAndCompletes(t *testing.T) {
 		t.Fatalf("result = %v, want the completed asset", result)
 	}
 }
+
+func TestPostsCreateWithAGroupSendsTheGroupAndNoAccounts(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"id": "post_3", "status": "draft"}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL, Workspace: "ws_1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, stderr, code := run(t, "", "posts", "create", "--group", "grp_1", "--text", "hi", "--quiet")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	created := api.find(t, http.MethodPost, "/posts")
+	if created.Body["account_group_id"] != "grp_1" {
+		t.Fatalf("account_group_id = %v", created.Body["account_group_id"])
+	}
+	if _, sent := created.Body["accounts"]; sent {
+		t.Fatalf("accounts = %v, want it omitted", created.Body["accounts"])
+	}
+}
+
+func TestAccountsListPassesTheGroupFilter(t *testing.T) {
+	isolate(t)
+	var query string
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, stderr, code := run(t, "", "accounts", "list", "--group", "grp_1", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	if query != "group_id=grp_1" {
+		t.Fatalf("query = %q", query)
+	}
+}
+
+func TestAccountGroupsSetMembersNeedsAccountsOrClear(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"id": "grp_1", "account_ids": []any{}}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, code := run(t, "", "account-groups", "set-members", "grp_1"); code != ExitUsage {
+		t.Fatalf("exit = %d, want %d", code, ExitUsage)
+	}
+	if len(api.paths()) != 0 {
+		t.Fatalf("the CLI called %v despite a usage error", api.paths())
+	}
+
+	_, stderr, code := run(t, "", "account-groups", "set-members", "grp_1", "--clear", "--quiet")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodPut, "/account-groups/grp_1/members")
+	if members, ok := sent.Body["account_ids"].([]any); !ok || len(members) != 0 {
+		t.Fatalf("account_ids = %v, want an empty list", sent.Body["account_ids"])
+	}
+}
+
+func TestAccountsMoveBlockedExitsWithAnError(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]any{"error": "move_blocked", "message": "Account has records in its workspace", "blocking_tables": []string{"posts"}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, _, code := run(t, "", "accounts", "move", "acc_1", "--to", "ws_2")
+	if code != ExitError {
+		t.Fatalf("exit = %d, want %d", code, ExitError)
+	}
+	if stdout != "" {
+		t.Fatalf("stdout = %q, want nothing on failure", stdout)
+	}
+	if moved := api.find(t, http.MethodPost, "/accounts/acc_1/move"); moved.Body["workspace_id"] != "ws_2" {
+		t.Fatalf("workspace_id = %v", moved.Body["workspace_id"])
+	}
+}

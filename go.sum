@@ -1,6 +1,6 @@
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
-github.com/fopost/fopost-go v0.0.0-20260830090720-12824500947a h1:ViI/sxhAfqr/QALkvuUx2Zd5WwOgUwgaOw3Fx/DLJmg=
-github.com/fopost/fopost-go v0.0.0-20260830090720-12824500947a/go.mod h1:Qz+7UCYTBnDEeZqB3VMrePxmYLVR9rFvx3+QWcKND8Q=
+github.com/fopost/fopost-go v0.2.1-0.20260919152457-6f1c2db35bc5 h1:8XJaSsVIREsjd6ttY9/ejBErSgLutETdKxhsd4mwDi0=
+github.com/fopost/fopost-go v0.2.1-0.20260919152457-6f1c2db35bc5/go.mod h1:Qz+7UCYTBnDEeZqB3VMrePxmYLVR9rFvx3+QWcKND8Q=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
