@@ -25,6 +25,7 @@ func newAccountsCmd(state *State) *cobra.Command {
 		newAccountsHealthCmd(state),
 		newAccountsValidateCmd(state),
 		newAccountsRefreshCmd(state),
+		newAccountsTelegramCmd(state),
 	)
 	return cmd
 }

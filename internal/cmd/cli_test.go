@@ -747,3 +747,71 @@ func TestAdsLeadsPassesTheCursorAndPrintsTheNextOne(t *testing.T) {
 		t.Fatalf("output is missing the next cursor:\n%s", stdout)
 	}
 }
+
+func TestAccountsTelegramConnectCodeSendsTheWorkspace(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"code": "abc123", "command": "/connect abc123", "expires_at": "2026-09-19T12:15:00Z"}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL, Workspace: "ws_1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "accounts", "telegram", "connect-code", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	if sent := api.find(t, http.MethodPost, "/accounts/telegram/connect-code"); sent.Body["workspaceId"] != "ws_1" {
+		t.Fatalf("workspaceId = %v", sent.Body["workspaceId"])
+	}
+	if !strings.Contains(stdout, `"code": "abc123"`) {
+		t.Fatalf("stdout = %q", stdout)
+	}
+}
+
+func TestAccountsTelegramCommandsSetParsesEntries(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"commands": []any{}}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, code := run(t, "", "accounts", "telegram", "commands", "set", "acc_1", "--command", "start"); code != ExitUsage {
+		t.Fatalf("exit = %d, want %d", code, ExitUsage)
+	}
+	if len(api.paths()) != 0 {
+		t.Fatalf("the CLI called %v despite a usage error", api.paths())
+	}
+
+	_, stderr, code := run(t, "", "accounts", "telegram", "commands", "set", "acc_1", "--command", "/start=Start here", "--quiet")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodPut, "/accounts/acc_1/telegram/commands")
+	commands, _ := sent.Body["commands"].([]any)
+	if len(commands) != 1 {
+		t.Fatalf("commands = %v", sent.Body["commands"])
+	}
+	if entry, _ := commands[0].(map[string]any); entry["command"] != "start" || entry["description"] != "Start here" {
+		t.Fatalf("command = %v", commands[0])
+	}
+}
+
+func TestAccountsTelegramCommandsClearSkipsPromptWithYes(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"commands": []any{}}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, stderr, code := run(t, "", "accounts", "telegram", "commands", "clear", "acc_1", "--yes", "--quiet")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	api.find(t, http.MethodDelete, "/accounts/acc_1/telegram/commands")
+}
