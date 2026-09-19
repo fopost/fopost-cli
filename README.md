@@ -205,6 +205,8 @@ Homebrew installs completions for you.
 fopost auth          login · status · logout
 fopost workspaces    list · get · create
 fopost accounts      list · get · rename · move · health · validate · refresh
+                     telegram connect-code · connect-status
+                     telegram commands get · set · clear
 fopost account-groups list · get · create · rename · set-members · delete
 fopost posts         list · get · create · publish · cancel · delete
                      duplicate · preflight · deliveries
