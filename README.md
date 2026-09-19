@@ -207,6 +207,7 @@ fopost workspaces    list · get · create
 fopost accounts      list · get · rename · move · health · validate · refresh
                      telegram connect-code · connect-status
                      telegram commands get · set · clear
+                     slack channels · members · identity · set-identity
 fopost account-groups list · get · create · rename · set-members · delete
 fopost posts         list · get · create · publish · cancel · delete
                      duplicate · preflight · deliveries
