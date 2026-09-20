@@ -194,6 +194,12 @@ func newArticlesUpdateCmd(state *State) *cobra.Command {
 			"second post.",
 		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// An update with no flags would send an empty body, which the API
+			// rejects; saying so here costs no round trip.
+			if title == "" && body == "" && excerpt == "" && status == "" &&
+				author == "" && imageURL == "" && tags == nil {
+				return usageErrorf("pass at least one field to change")
+			}
 			client, err := state.Client()
 			if err != nil {
 				return err
