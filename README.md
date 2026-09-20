@@ -220,6 +220,13 @@ fopost accounts      list · get · rename · move · health · validate · refr
                      gbp delete-place-action
                      gbp verification · start-verification · complete-verification
                      gbp performance · keywords · assign
+                     pinterest boards · create-board
+                     youtube playlists · create-playlist · set-default-playlist
+                     youtube captions · transcript
+                     bluesky languages · set-languages
+                     tiktok creator-info · music · locations · video
+                     instagram audio · publishing-limit · stories
+                     linkedin mentions
 fopost account-groups list · get · create · rename · set-members · delete
 fopost posts         list · get · create · publish · cancel · delete
                      duplicate · preflight · deliveries

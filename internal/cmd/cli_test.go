@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,6 +47,7 @@ type fakeAPI struct {
 type recordedRequest struct {
 	Method string
 	Path   string
+	Query  url.Values
 	Body   map[string]any
 }
 
@@ -61,7 +63,9 @@ func newFakeAPI(t *testing.T, handler func(w http.ResponseWriter, r *http.Reques
 		}
 		<-api.mu
 		api.Keys = append(api.Keys, r.Header.Get("X-API-Key"))
-		api.Requests = append(api.Requests, recordedRequest{Method: r.Method, Path: r.URL.Path, Body: body})
+		api.Requests = append(api.Requests, recordedRequest{
+			Method: r.Method, Path: r.URL.Path, Query: r.URL.Query(), Body: body,
+		})
 		api.mu <- struct{}{}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -960,4 +964,70 @@ func TestAccountsDiscordAssignRoleSendsAPut(t *testing.T) {
 		t.Fatalf("exit = %d: %s", code, stderr)
 	}
 	api.find(t, http.MethodPut, "/accounts/acc_1/discord/roles/r1/members/u7")
+}
+
+func TestAccountsPinterestCreateBoardSendsOnlyWhatWasGiven(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"id": "b1", "name": "Recipes"}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, stderr, code := run(t, "", "accounts", "pinterest", "create-board", "acc_1", "Recipes", "--quiet")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodPost, "/accounts/acc_1/pinterest/boards")
+	if sent.Body["name"] != "Recipes" {
+		t.Fatalf("body = %v", sent.Body)
+	}
+	if _, ok := sent.Body["privacy"]; ok {
+		t.Fatalf("privacy should be absent: %v", sent.Body)
+	}
+}
+
+func TestAccountsTikTokMusicPassesTheQueryThrough(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"id": "m1", "title": "Sunrise", "author": "Kite"}}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "accounts", "tiktok", "music", "acc_1", "sunrise", "--limit", "5", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodGet, "/accounts/acc_1/tiktok/music")
+	if sent.Query.Get("q") != "sunrise" || sent.Query.Get("limit") != "5" {
+		t.Fatalf("query = %v", sent.Query)
+	}
+	if !strings.Contains(stdout, `"id": "m1"`) {
+		t.Fatalf("stdout = %q", stdout)
+	}
+}
+
+func TestAccountsYouTubeSetDefaultPlaylistRefusesAMissingID(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"playlist_id": nil}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, code := run(t, "", "accounts", "youtube", "set-default-playlist", "acc_1"); code == ExitOK {
+		t.Fatal("a missing playlist id should not clear the default")
+	}
+
+	if _, stderr, code := run(t, "", "accounts", "youtube", "set-default-playlist", "acc_1", "--clear", "--quiet"); code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodPut, "/accounts/acc_1/youtube/playlists/default")
+	if sent.Body["playlist_id"] != nil {
+		t.Fatalf("body = %v", sent.Body)
+	}
 }
