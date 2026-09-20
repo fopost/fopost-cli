@@ -218,6 +218,7 @@ fopost posts         list · get · create · publish · cancel · delete
                      duplicate · preflight · deliveries
 fopost media         list · upload · delete
 fopost labels        list · create · delete
+fopost knowledge     list · add · sync · delete · search
 fopost analytics     overview · top-posts · time-series
 fopost automations   list · get · toggle · trigger · runs
 fopost webhooks      list · create · test · delete
