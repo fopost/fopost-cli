@@ -213,7 +213,8 @@ fopost posts         list · get · create · publish · cancel · delete
                      duplicate · preflight · deliveries
 fopost media         list · upload · delete
 fopost labels        list · create · delete
-fopost analytics     overview · top-posts · time-series
+fopost analytics     overview · top-posts · time-series · decay · frequency · timeline ·
+                     changes · collect-post · native-posts
 fopost automations   list · get · toggle · trigger · runs
 fopost webhooks      list · create · test · delete
 fopost ads           tree · pause · resume · insights · leads
@@ -225,6 +226,32 @@ Run `fopost <command> --help` for the flags on any of them.
 
 Global flags, accepted everywhere: `--api-key`, `--base-url`, `--workspace`,
 `--timeout`, `--json`, `--quiet`, `--no-color`.
+
+## Analytics
+
+```bash
+# How long a post keeps earning, from the repeated readings of each post
+fopost analytics decay --days 30
+
+# Whether posting more earned more
+fopost analytics frequency --days 90
+
+# Every reading held for one post, by id or by permalink
+fopost analytics timeline post_1
+fopost analytics timeline 'https://x.com/acme/status/1'
+
+# Mirror the metrics into your own store; feed the cursor back as --since
+fopost analytics changes --since 2026-03-02T00:00:00Z --json
+
+# Refresh one post now instead of waiting for the next collection run
+fopost analytics collect-post post_1
+
+# Posts on an account that never went out through FoPost
+fopost analytics native-posts --account acc_1
+```
+
+`collect-post` spends the same per-user budget as a full collection run, so a
+loop over it will start answering `429`.
 
 ## Examples
 

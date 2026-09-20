@@ -20,6 +20,12 @@ func newAnalyticsCmd(state *State) *cobra.Command {
 		newAnalyticsOverviewCmd(state),
 		newAnalyticsTopPostsCmd(state),
 		newAnalyticsTimeSeriesCmd(state),
+		newAnalyticsDecayCmd(state),
+		newAnalyticsFrequencyCmd(state),
+		newAnalyticsTimelineCmd(state),
+		newAnalyticsChangesCmd(state),
+		newAnalyticsCollectPostCmd(state),
+		newAnalyticsNativePostsCmd(state),
 	)
 	return cmd
 }
