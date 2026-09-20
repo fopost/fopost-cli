@@ -218,6 +218,10 @@ fopost posts         list · get · create · publish · cancel · delete
                      duplicate · preflight · deliveries
 fopost media         list · upload · delete
 fopost labels        list · create · delete
+fopost contacts      list · get · conversations · import · delete
+fopost broadcasts    list · get · create · send · cancel · recipients · delete
+fopost sequences     list · get · create · enroll · unenroll · enrollments · pause · resume · delete
+                     fields list · fields delete
 fopost knowledge     list · add · sync · delete · search
 fopost analytics     overview · top-posts · time-series
 fopost automations   list · get · toggle · trigger · runs
