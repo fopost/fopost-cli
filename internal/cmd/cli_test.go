@@ -866,3 +866,68 @@ func TestAccountsSlackSetIdentitySendsOnlyPassedFields(t *testing.T) {
 		t.Fatalf("icon_url was sent: %v", sent.Body)
 	}
 }
+
+func TestAccountsWhatsappTemplatesCreateReportsTheReviewStatus(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+			"id": "tpl-1", "name": "order_shipped", "language": "en_US",
+			"category": "UTILITY", "status": "PENDING", "components": []any{},
+		}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "accounts", "whatsapp", "templates", "create", "acc_1",
+		"--name", "order_shipped", "--body", "On its way.", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	api.find(t, http.MethodPost, "/accounts/acc_1/whatsapp/templates")
+	// Nothing marks a template approved but the platform.
+	if !strings.Contains(stdout, `"status": "PENDING"`) {
+		t.Fatalf("stdout = %q", stdout)
+	}
+}
+
+func TestAccountsWhatsappTemplatesCreateNeedsABodyOrComponents(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, code := run(t, "", "accounts", "whatsapp", "templates", "create", "acc_1",
+		"--name", "order_shipped"); code == ExitOK {
+		t.Fatal("a template with no body should not be filed")
+	}
+	if len(api.paths()) != 0 {
+		t.Fatalf("nothing should reach the API, got %v", api.paths())
+	}
+}
+
+func TestAccountsWhatsappTemplatesDeleteNamesItInTheQuery(t *testing.T) {
+	isolate(t)
+	var query string
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"deleted": true}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, stderr, code := run(t, "", "accounts", "whatsapp", "templates", "delete", "acc_1", "tpl-1",
+		"--name", "order_shipped", "--quiet")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	api.find(t, http.MethodDelete, "/accounts/acc_1/whatsapp/templates/tpl-1")
+	// The name is what the platform deletes by, so it has to reach the query.
+	if query != "name=order_shipped" {
+		t.Fatalf("query = %q", query)
+	}
+}
