@@ -258,6 +258,17 @@ from 500 ms capped at 60 s, retrying only `429`, `5xx`, and network failures, an
 honouring `Retry-After`. When the retries are exhausted the CLI prints the reason
 and exits `7` or `9`, so a script can back off on its own terms.
 
+## Chatbots and the inbox
+
+The [chat adapter](https://fopost.com/docs/sdks/chat-adapter) turns the FoPost inbox into one
+send/receive channel for a chatbot framework. It ships in the TypeScript and Python SDKs.
+
+There is no `fopost inbox` command, and none is planned: answering a direct message is a
+long-running service, not a shell invocation. A bot belongs in a program, built on
+[`fopost-go`](https://github.com/fopost/fopost-go), which this CLI is built on, or on one of the
+other [SDKs](https://fopost.com/docs/sdks/overview). No API change sits behind the adapter, so
+every client can do the same thing.
+
 ## Support
 
 - Documentation: <https://fopost.com/docs>
