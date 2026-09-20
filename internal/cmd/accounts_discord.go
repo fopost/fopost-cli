@@ -51,9 +51,9 @@ func newDiscordChannelsCmd(state *State) *cobra.Command {
 			return printer.Value(channels, func() {
 				rows := make([][]string, 0, len(channels))
 				for _, c := range channels {
-					rows = append(rows, []string{c.ID, "#" + c.Name, strconv.Itoa(c.Type), boolLabel(c.IsCurrent, "yes", "no")})
+					rows = append(rows, []string{c.ID, "#" + c.Name, strconv.Itoa(c.Type), boolLabel(c.CanPost, "yes", "no"), boolLabel(c.IsCurrent, "yes", "no")})
 				}
-				printer.Table([]string{"id", "name", "type", "current"}, rows)
+				printer.Table([]string{"id", "name", "type", "can post", "current"}, rows)
 			})
 		},
 	}
