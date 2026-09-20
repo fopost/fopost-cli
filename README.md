@@ -208,15 +208,34 @@ fopost accounts      list · get · rename · move · health · validate · refr
                      telegram connect-code · connect-status
                      telegram commands get · set · clear
                      slack channels · members · identity · set-identity
+                     messaging ice-breakers · persistent-menu · greeting (get · set · clear)
+                     webhook-subscription · webhook-subscription resubscribe
+                     discord channels · switch-channel · identity · set-identity
+                     discord events · create-event · delete-event
+                     discord members · roles · assign-role · unassign-role · dm
+                     gbp location · update-location · attributes · update-attributes
+                     gbp menus · replace-menus · services · replace-services
+                     gbp media · add-media · delete-media
+                     gbp place-actions · add-place-action · update-place-action
+                     gbp delete-place-action
+                     gbp verification · start-verification · complete-verification
+                     gbp performance · keywords · assign
 fopost account-groups list · get · create · rename · set-members · delete
 fopost posts         list · get · create · publish · cancel · delete
                      duplicate · preflight · deliveries
 fopost media         list · upload · delete
 fopost labels        list · create · delete
+fopost contacts      list · get · conversations · import · delete
+fopost broadcasts    list · get · create · send · cancel · recipients · delete
+fopost sequences     list · get · create · enroll · unenroll · enrollments · pause · resume · delete
+                     fields list · fields delete
+fopost knowledge     list · add · sync · delete · search
 fopost analytics     overview · top-posts · time-series
 fopost automations   list · get · toggle · trigger · runs
 fopost webhooks      list · create · test · delete
 fopost ads           tree · pause · resume · insights · leads
+fopost activity      list · audit
+fopost ads           tree · pause · resume · insights · leads · catalogs · library
 fopost completion    bash · zsh · fish · powershell
 fopost version
 ```

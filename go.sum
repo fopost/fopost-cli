@@ -1,8 +1,8 @@
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
-github.com/fopost/fopost-go v0.2.1-0.20260919224127-0a4908e7b1fc h1:XzQsDXpqdmHo0fbAs07vVyESqW2fFC1WdNAPjHTssG8=
-github.com/fopost/fopost-go v0.2.1-0.20260919224127-0a4908e7b1fc/go.mod h1:Qz+7UCYTBnDEeZqB3VMrePxmYLVR9rFvx3+QWcKND8Q=
-github.com/fopost/fopost-go v0.2.1-0.20260920012431-410ddec4c8e8 h1:hVVnyf67poU2SeUeSS1v5qRDWkhDZEcgCUMSMxr7+9s=
-github.com/fopost/fopost-go v0.2.1-0.20260920012431-410ddec4c8e8/go.mod h1:Qz+7UCYTBnDEeZqB3VMrePxmYLVR9rFvx3+QWcKND8Q=
+github.com/fopost/fopost-go v0.2.1-0.20260920154339-1957686eb2db h1:ZRTF4nBDm+K4SzZEPlsC8RvLHIKO0Vj4Dr+nw1+iw8M=
+github.com/fopost/fopost-go v0.2.1-0.20260920154339-1957686eb2db/go.mod h1:Qz+7UCYTBnDEeZqB3VMrePxmYLVR9rFvx3+QWcKND8Q=
+github.com/fopost/fopost-go v0.2.1-0.20260920161845-0d662e46400a h1:RG/LXPHro7c2J/e7e+sTxNV8C963xZ8vXBDo+4AvL/c=
+github.com/fopost/fopost-go v0.2.1-0.20260920161845-0d662e46400a/go.mod h1:Qz+7UCYTBnDEeZqB3VMrePxmYLVR9rFvx3+QWcKND8Q=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
