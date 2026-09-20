@@ -27,6 +27,9 @@ func newAccountsCmd(state *State) *cobra.Command {
 		newAccountsRefreshCmd(state),
 		newAccountsTelegramCmd(state),
 		newAccountsSlackCmd(state),
+		newAccountsMessagingCmd(state),
+		newAccountsWebhookCmd(state),
+		newAccountsDiscordCmd(state),
 	)
 	return cmd
 }
