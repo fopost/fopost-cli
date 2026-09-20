@@ -866,3 +866,60 @@ func TestAccountsSlackSetIdentitySendsOnlyPassedFields(t *testing.T) {
 		t.Fatalf("icon_url was sent: %v", sent.Body)
 	}
 }
+
+func TestAccountsRedditFlairsPassesTheSubredditAsAQuery(t *testing.T) {
+	isolate(t)
+	var query string
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+			"subreddit": "webdev",
+			"flairs":    []any{map[string]any{"id": "flair_1", "text": "Showoff Saturday", "editable": false}},
+		}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The r/ prefix is accepted and stripped, so both spellings reach one path.
+	stdout, stderr, code := run(t, "", "accounts", "reddit", "flairs", "acc_1", "r/webdev", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	api.find(t, http.MethodGet, "/accounts/acc_1/reddit/flairs")
+	if query != "subreddit=webdev" {
+		t.Fatalf("query = %q", query)
+	}
+	if !strings.Contains(stdout, `"flair_1"`) {
+		t.Fatalf("stdout = %q", stdout)
+	}
+}
+
+func TestAccountsRedditSetDefaultRefusesBothAndClearsWithNull(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"subreddit": "u_someone"}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, code := run(t, "", "accounts", "reddit", "set-default", "acc_1", "webdev", "--clear"); code != ExitUsage {
+		t.Fatalf("exit = %d, want %d", code, ExitUsage)
+	}
+	if _, _, code := run(t, "", "accounts", "reddit", "set-default", "acc_1"); code != ExitUsage {
+		t.Fatalf("exit = %d, want %d", code, ExitUsage)
+	}
+	if len(api.paths()) != 0 {
+		t.Fatalf("the CLI called %v despite a usage error", api.paths())
+	}
+
+	_, stderr, code := run(t, "", "accounts", "reddit", "set-default", "acc_1", "--clear", "--quiet")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodPut, "/accounts/acc_1/reddit/default-subreddit")
+	if v, ok := sent.Body["subreddit"]; !ok || v != nil {
+		t.Fatalf("subreddit = %v (present %v), want null", v, ok)
+	}
+}
