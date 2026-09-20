@@ -3,7 +3,7 @@ module github.com/fopost/fopost-cli
 go 1.22
 
 require (
-	github.com/fopost/fopost-go v0.2.1-0.20260920010902-6e2a3ac2c475
+	github.com/fopost/fopost-go v0.2.1-0.20260920112757-1715213964a8
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/term v0.27.0
 )

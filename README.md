@@ -210,6 +210,9 @@ fopost accounts      list · get · rename · move · health · validate · refr
                      slack channels · members · identity · set-identity
                      messaging ice-breakers · persistent-menu · greeting (get · set · clear)
                      webhook-subscription · webhook-subscription resubscribe
+                     discord channels · switch-channel · identity · set-identity
+                     discord events · create-event · delete-event
+                     discord members · roles · assign-role · unassign-role · dm
 fopost account-groups list · get · create · rename · set-members · delete
 fopost posts         list · get · create · publish · cancel · delete
                      duplicate · preflight · deliveries
