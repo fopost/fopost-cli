@@ -75,7 +75,7 @@ func newAdsTreeCmd(state *State) *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringVar(&connection, "connection", "", "Meta Ads connection id (required)")
+	cmd.Flags().StringVar(&connection, "connection", "", "Ad connection id (required)")
 	return cmd
 }
 
@@ -134,7 +134,7 @@ func newAdsStatusCmd(state *State, verb, status string) *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringVar(&connection, "connection", "", "Meta Ads connection id (required)")
+	cmd.Flags().StringVar(&connection, "connection", "", "Ad connection id (required)")
 	cmd.Flags().StringArrayVar(&campaigns, "campaign", nil, "campaign id (repeatable)")
 	cmd.Flags().StringArrayVar(&adSets, "ad-set", nil, "ad set id (repeatable)")
 	cmd.Flags().StringArrayVar(&ads, "ad", nil, "ad id (repeatable)")
@@ -222,7 +222,7 @@ func newAdsInsightsCmd(state *State) *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringVar(&connection, "connection", "", "Meta Ads connection id (required)")
+	cmd.Flags().StringVar(&connection, "connection", "", "Ad connection id (required)")
 	cmd.Flags().StringVar(&since, "since", "", "first day, YYYY-MM-DD (required)")
 	cmd.Flags().StringVar(&until, "until", "", "last day, YYYY-MM-DD (required)")
 	cmd.Flags().StringVar(&breakdown, "breakdown", "", "split by age, gender, placement or country")
