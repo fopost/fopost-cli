@@ -208,6 +208,8 @@ fopost accounts      list · get · rename · move · health · validate · refr
                      telegram connect-code · connect-status
                      telegram commands get · set · clear
                      slack channels · members · identity · set-identity
+                     messaging ice-breakers · persistent-menu · greeting (get · set · clear)
+                     webhook-subscription · webhook-subscription resubscribe
                      discord channels · switch-channel · identity · set-identity
                      discord events · create-event · delete-event
                      discord members · roles · assign-role · unassign-role · dm
