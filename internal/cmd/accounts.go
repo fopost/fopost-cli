@@ -31,6 +31,12 @@ func newAccountsCmd(state *State) *cobra.Command {
 		newAccountsWebhookCmd(state),
 		newAccountsDiscordCmd(state),
 		newAccountsGBPCmd(state),
+		newAccountsPinterestCmd(state),
+		newAccountsYouTubeCmd(state),
+		newAccountsBlueskyCmd(state),
+		newAccountsTikTokCmd(state),
+		newAccountsInstagramCmd(state),
+		newAccountsLinkedInCmd(state),
 	)
 	return cmd
 }
