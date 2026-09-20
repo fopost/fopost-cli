@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	fopost "github.com/fopost/fopost-go"
@@ -15,9 +16,10 @@ func init() { register(newAdsCmd) }
 func newAdsCmd(state *State) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ads",
-		Short: "Inspect Meta campaigns, change their status, and read insights and leads",
+		Short: "Inspect campaigns, change their status, and read insights and leads",
 	}
 	cmd.AddCommand(
+		newAdsNetworksCmd(state),
 		newAdsTreeCmd(state),
 		newAdsStatusCmd(state, "pause", fopost.AdStatusPaused),
 		newAdsStatusCmd(state, "resume", fopost.AdStatusActive),
@@ -25,6 +27,52 @@ func newAdsCmd(state *State) *cobra.Command {
 		newAdsLeadsCmd(state),
 	)
 	return cmd
+}
+
+func newAdsNetworksCmd(state *State) *cobra.Command {
+	return &cobra.Command{
+		Use:   "networks",
+		Short: "List the ad networks this deployment knows and what each one supports",
+		Long: "Lists every ad network in the API's registry. A network reported as not " +
+			"configured is listed but cannot be connected yet.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			providers, err := client.Ads.Providers(cmd.Context())
+			if err != nil {
+				return err
+			}
+			printer := state.Printer()
+			return printer.Value(providers, func() {
+				rows := make([][]string, 0, len(providers))
+				for _, provider := range providers {
+					rows = append(rows, []string{
+						provider.ID,
+						output.Truncate(provider.Name, 24),
+						boolLabel(provider.Configured, "yes", "no"),
+						output.Truncate(strings.Join(provider.ConnectMethods, ", "), 20),
+						output.Truncate(strings.Join(capabilityNames(provider.Capabilities), ", "), 48),
+					})
+				}
+				printer.Table([]string{"id", "name", "configured", "logins", "supports"}, rows)
+			})
+		},
+	}
+}
+
+// The capabilities a network answers true for, sorted so the table is stable.
+func capabilityNames(capabilities map[string]bool) []string {
+	names := make([]string, 0, len(capabilities))
+	for name, supported := range capabilities {
+		if supported {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 func minorAmount(minor *int) string {

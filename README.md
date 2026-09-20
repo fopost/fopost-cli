@@ -216,7 +216,7 @@ fopost labels        list · create · delete
 fopost analytics     overview · top-posts · time-series
 fopost automations   list · get · toggle · trigger · runs
 fopost webhooks      list · create · test · delete
-fopost ads           tree · pause · resume · insights · leads
+fopost ads           networks · tree · pause · resume · insights · leads
 fopost completion    bash · zsh · fish · powershell
 fopost version
 ```
