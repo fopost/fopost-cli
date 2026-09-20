@@ -866,3 +866,95 @@ func TestAccountsSlackSetIdentitySendsOnlyPassedFields(t *testing.T) {
 		t.Fatalf("icon_url was sent: %v", sent.Body)
 	}
 }
+
+func TestAdsSparkPostsSendsTheIdentityAndPrintsTheViews(t *testing.T) {
+	isolate(t)
+	var query string
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		json.NewEncoder(w).Encode(map[string]any{"data": []any{
+			map[string]any{"id": "item_99", "identityId": "idt_1", "caption": "Behind the scenes", "views": 48213},
+		}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL, Workspace: "ws_1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, code := run(t, "", "ads", "spark-posts", "--connection", "conn_1"); code != ExitUsage {
+		t.Fatalf("exit = %d without --ad-account, want %d", code, ExitUsage)
+	}
+
+	stdout, stderr, code := run(t, "", "ads", "spark-posts",
+		"--connection", "conn_1", "--ad-account", "7011", "--identity", "idt_1")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	api.find(t, http.MethodGet, "/ads/spark-posts")
+	if !strings.Contains(query, "identity_id=idt_1") || !strings.Contains(query, "ad_account_id=7011") {
+		t.Fatalf("query = %q", query)
+	}
+	for _, want := range []string{"item_99", "48213"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("spark-posts output is missing %q:\n%s", want, stdout)
+		}
+	}
+}
+
+func TestAdsCommentsReadsAPageAndTheWritesCarryTheAd(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/reply"):
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"replyId": "cm_2"}})
+		case r.Method == http.MethodGet:
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+				"comments": []any{map[string]any{
+					"id": "cm_1", "text": "where can I get this?", "authorName": "someone", "hidden": true,
+				}},
+				"nextCursor": "2",
+			}})
+		default:
+			json.NewEncoder(w).Encode(map[string]any{"message": "ok"})
+		}
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL, Workspace: "ws_1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "ads", "comments", "--connection", "conn_1", "--ad", "ad_1")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	api.find(t, http.MethodGet, "/ads/comments")
+	for _, want := range []string{"cm_1", "hidden", "Next cursor: 2"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("comments output is missing %q:\n%s", want, stdout)
+		}
+	}
+
+	if _, stderr, code = run(t, "", "ads", "reply", "cm_1",
+		"--connection", "conn_1", "--ad", "ad_1", "--text", "Friday!"); code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodPost, "/ads/comments/cm_1/reply")
+	if sent.Body["adId"] != "ad_1" || sent.Body["text"] != "Friday!" {
+		t.Fatalf("body = %v", sent.Body)
+	}
+
+	if _, stderr, code = run(t, "", "ads", "hide", "cm_1",
+		"--connection", "conn_1", "--ad", "ad_1"); code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	if hide := api.find(t, http.MethodPost, "/ads/comments/cm_1/hide"); hide.Body["hidden"] != true {
+		t.Fatalf("body = %v", hide.Body)
+	}
+
+	if _, stderr, code = run(t, "", "ads", "delete-comment", "cm_1",
+		"--connection", "conn_1", "--ad", "ad_1"); code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	// The ad travels in the body, because the path already carries the comment.
+	if del := api.find(t, http.MethodDelete, "/ads/comments/cm_1"); del.Body["adId"] != "ad_1" {
+		t.Fatalf("body = %v", del.Body)
+	}
+}
