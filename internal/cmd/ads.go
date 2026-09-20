@@ -15,7 +15,7 @@ func init() { register(newAdsCmd) }
 func newAdsCmd(state *State) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ads",
-		Short: "Inspect Meta campaigns and catalogs, change status, and read insights, leads and the ad archive",
+		Short: "Inspect campaigns and catalogs, change status, and read insights, leads and the ad archive",
 	}
 	cmd.AddCommand(
 		newAdsTreeCmd(state),
@@ -25,6 +25,7 @@ func newAdsCmd(state *State) *cobra.Command {
 		newAdsLeadsCmd(state),
 		newAdsCatalogsCmd(state),
 		newAdsLibraryCmd(state),
+		newAdsGoogleCmd(state),
 	)
 	return cmd
 }
