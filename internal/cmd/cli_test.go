@@ -866,3 +866,98 @@ func TestAccountsSlackSetIdentitySendsOnlyPassedFields(t *testing.T) {
 		t.Fatalf("icon_url was sent: %v", sent.Body)
 	}
 }
+
+func TestAccountsDiscordChannelsPrintsTheCurrentOne(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{
+			{"id": "c2", "name": "launches", "type": 0, "parent_id": nil, "nsfw": false, "is_current": true},
+		}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "accounts", "discord", "channels", "acc_1", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	api.find(t, http.MethodGet, "/accounts/acc_1/discord/channels")
+	if !strings.Contains(stdout, `"is_current": true`) {
+		t.Fatalf("stdout = %q", stdout)
+	}
+}
+
+func TestAccountsDiscordSetIdentitySendsOnlyPassedFields(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"username": "Release Bot", "avatar_url": nil}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, code := run(t, "", "accounts", "discord", "set-identity", "acc_1", "--username", "Bot", "--clear-username"); code != ExitUsage {
+		t.Fatalf("exit = %d, want %d", code, ExitUsage)
+	}
+	if len(api.paths()) != 0 {
+		t.Fatalf("the CLI called %v despite a usage error", api.paths())
+	}
+
+	_, stderr, code := run(t, "", "accounts", "discord", "set-identity", "acc_1", "--username", "Release Bot", "--quiet")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodPatch, "/accounts/acc_1/discord/identity")
+	if sent.Body["username"] != "Release Bot" {
+		t.Fatalf("username = %v", sent.Body["username"])
+	}
+	// An unset flag never reaches the wire, so Discord keeps it.
+	if _, ok := sent.Body["avatar_url"]; ok {
+		t.Fatalf("avatar_url was sent: %v", sent.Body)
+	}
+}
+
+func TestAccountsDiscordCreateEventNeedsAChannelOrALocation(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+			"id": "e1", "name": "Launch stream", "start_time": "2026-10-01T18:00:00.000Z", "status": "scheduled",
+		}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	args := []string{"accounts", "discord", "create-event", "acc_1", "--name", "Launch stream", "--start-time", "2026-10-01T18:00:00Z"}
+	if _, _, code := run(t, "", args...); code != ExitUsage {
+		t.Fatalf("exit = %d, want %d", code, ExitUsage)
+	}
+	if len(api.paths()) != 0 {
+		t.Fatalf("the CLI called %v despite a usage error", api.paths())
+	}
+
+	full := append(args, "--end-time", "2026-10-01T19:00:00Z", "--location", "https://example.com/live")
+	if _, stderr, code := run(t, "", full...); code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodPost, "/accounts/acc_1/discord/events")
+	if sent.Body["location"] != "https://example.com/live" {
+		t.Fatalf("location = %v", sent.Body["location"])
+	}
+}
+
+func TestAccountsDiscordAssignRoleSendsAPut(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"assigned": true}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, stderr, code := run(t, "", "accounts", "discord", "assign-role", "acc_1", "r1", "u7", "--quiet"); code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	api.find(t, http.MethodPut, "/accounts/acc_1/discord/roles/r1/members/u7")
+}

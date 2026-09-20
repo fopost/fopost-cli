@@ -208,6 +208,9 @@ fopost accounts      list · get · rename · move · health · validate · refr
                      telegram connect-code · connect-status
                      telegram commands get · set · clear
                      slack channels · members · identity · set-identity
+                     discord channels · switch-channel · identity · set-identity
+                     discord events · create-event · delete-event
+                     discord members · roles · assign-role · unassign-role · dm
 fopost account-groups list · get · create · rename · set-members · delete
 fopost posts         list · get · create · publish · cancel · delete
                      duplicate · preflight · deliveries
