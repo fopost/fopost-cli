@@ -217,6 +217,7 @@ fopost analytics     overview · top-posts · time-series
 fopost automations   list · get · toggle · trigger · runs
 fopost webhooks      list · create · test · delete
 fopost ads           tree · pause · resume · insights · leads
+fopost activity      list · audit
 fopost completion    bash · zsh · fish · powershell
 fopost version
 ```
