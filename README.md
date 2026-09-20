@@ -248,3 +248,22 @@ and exits `7` or `9`, so a script can back off on its own terms.
 ## License
 
 MIT © Porter Bridge, LLC. See [LICENSE](LICENSE).
+
+### Google Ads
+
+`fopost ads google` covers the Search surface no other network has. Every command names
+the connection and the Google Ads account:
+
+```bash
+fopost ads google keywords --connection c4d5e6f7-… --customer 1234567890
+fopost ads google keyword-ideas --connection c4d5e6f7-… --customer 1234567890 --seed "running shoes"
+fopost ads google search-terms --connection c4d5e6f7-… --customer 1234567890 --since 2026-09-01 --until 2026-09-20
+fopost ads google assets --connection c4d5e6f7-… --customer 1234567890
+fopost ads google asset-groups --connection c4d5e6f7-… --customer 1234567890
+fopost ads google conversions --connection c4d5e6f7-… --customer 1234567890
+fopost ads google query --connection c4d5e6f7-… --customer 1234567890 \
+  'SELECT campaign.name, metrics.clicks FROM campaign WHERE segments.date DURING LAST_30_DAYS'
+```
+
+`--customer` has to name an account the connection's grant reaches; any other answers
+404. The other `fopost ads` commands work across networks and dispatch by connection.
