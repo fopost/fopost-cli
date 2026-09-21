@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"encoding/json"
+	"fmt"
+	"strconv"
 	"strings"
 
 	fopost "github.com/fopost/fopost-go"
@@ -23,6 +26,7 @@ func newAccountsCmd(state *State) *cobra.Command {
 		newAccountsRenameCmd(state),
 		newAccountsMoveCmd(state),
 		newAccountsHealthCmd(state),
+		newAccountsMetricsCmd(state),
 		newAccountsValidateCmd(state),
 		newAccountsRefreshCmd(state),
 		newAccountsTelegramCmd(state),
@@ -243,6 +247,74 @@ func newAccountsHealthCmd(state *State) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "re-check the account live instead of reading the stored result")
 	return cmd
+}
+
+func newAccountsMetricsCmd(state *State) *cobra.Command {
+	return &cobra.Command{
+		Use:   "metrics <account-id>",
+		Short: "Show the numbers this account's own network reports",
+		Long: "Shows the metrics only this account's network reports, in its own vocabulary:\n" +
+			"ad-break earnings, story taps, a retention curve, the search terms behind a\n" +
+			"listing. Read from the newest collected snapshot, never fetched live.\n\n" +
+			"A network whose metric access has not been granted yet answers 503.",
+		Example: strings.Join([]string{
+			"  fopost accounts metrics acc_1",
+			"  fopost accounts metrics acc_1 --output json",
+		}, "\n"),
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			printer := state.Printer()
+
+			metrics, err := client.Accounts.PlatformMetrics(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			return printer.Value(metrics, func() {
+				printer.Line("%s · collected %s", metrics.Platform,
+					output.Stamp(metrics.Account.FetchedAt.Time, metrics.Account.FetchedAt.Raw))
+				printer.Line("")
+				printMetricRows(printer, "Account", metrics.Account.Metrics)
+				if len(metrics.Post.Metrics) > 0 {
+					printer.Line("")
+					label := "Latest Post"
+					if metrics.Post.ExternalPostID != "" {
+						label += " " + metrics.Post.ExternalPostID
+					}
+					printMetricRows(printer, label, metrics.Post.Metrics)
+				}
+			})
+		},
+	}
+}
+
+// A series is an array rather than a number, so it is summarised by its length
+// instead of printed inline; --output json carries the points themselves.
+func printMetricRows(printer *output.Printer, heading string, rows []fopost.PlatformMetricRow) {
+	if len(rows) == 0 {
+		printer.Line("%s: no metrics collected yet", heading)
+		return
+	}
+	printer.Line("%s", heading)
+	table := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		table = append(table, []string{row.Key, row.Label, metricValue(row)})
+	}
+	printer.Table([]string{"key", "label", "value"}, table)
+}
+
+func metricValue(row fopost.PlatformMetricRow) string {
+	if number, ok := row.Number(); ok {
+		return strconv.FormatFloat(number, 'f', -1, 64)
+	}
+	var points []json.RawMessage
+	if err := json.Unmarshal(row.Value, &points); err == nil {
+		return fmt.Sprintf("%d points", len(points))
+	}
+	return strings.TrimSpace(string(row.Value))
 }
 
 func newAccountsValidateCmd(state *State) *cobra.Command {

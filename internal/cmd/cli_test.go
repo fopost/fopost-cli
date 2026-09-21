@@ -1031,3 +1031,56 @@ func TestAccountsYouTubeSetDefaultPlaylistRefusesAMissingID(t *testing.T) {
 		t.Fatalf("body = %v", sent.Body)
 	}
 }
+
+func TestAccountsMetricsAsksForRawAndPrintsBothBlocks(t *testing.T) {
+	isolate(t)
+	var path, query string
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		path, query = r.URL.Path, r.URL.RawQuery
+		io.WriteString(w, `{"data":{"platform":"facebook","account":{"fetched_at":"2026-09-20T02:00:00.000Z","metrics":[{"key":"page_daily_video_ad_break_earnings","label":"Ad Break Earnings","kind":"currency_usd","value":42.15},{"key":"daily_views","label":"Views by Day","kind":"series","value":[{"day":"2026-09-19"},{"day":"2026-09-20"}]}]},"post":{"external_post_id":"123_456","fetched_at":"2026-09-20T02:00:00.000Z","metrics":[{"key":"post_impressions_paid","label":"Paid Impressions","kind":"count","value":1500}]}}}`)
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "accounts", "metrics", "acc_1")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	if path != "/accounts/acc_1/insights" || query != "raw=true" {
+		t.Fatalf("request = %s?%s", path, query)
+	}
+	for _, want := range []string{
+		"facebook",
+		"page_daily_video_ad_break_earnings",
+		"42.15",
+		// A series is summarised rather than printed inline.
+		"2 points",
+		"Latest Post 123_456",
+		"post_impressions_paid",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("stdout missing %q:\n%s", want, stdout)
+		}
+	}
+}
+
+func TestAccountsMetricsSurfacesAPendingGrant(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		io.WriteString(w, `{"error":"platform_metrics_unavailable","message":"google-business metrics are not available on this deployment yet."}`)
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, stderr, code := run(t, "", "accounts", "metrics", "acc_1")
+	if code == ExitOK {
+		t.Fatal("a pending grant must not exit 0")
+	}
+	if !strings.Contains(stderr, "platform_metrics_unavailable") &&
+		!strings.Contains(stderr, "not available") {
+		t.Fatalf("stderr = %q", stderr)
+	}
+}
