@@ -204,19 +204,45 @@ Homebrew installs completions for you.
 ```
 fopost auth          login · status · logout
 fopost workspaces    list · get · create
-fopost accounts      list · get · rename · move · health · validate · refresh
+fopost accounts      list · get · rename · move · health · metrics · validate · refresh
                      telegram connect-code · connect-status
                      telegram commands get · set · clear
                      slack channels · members · identity · set-identity
+                     messaging ice-breakers · persistent-menu · greeting (get · set · clear)
+                     webhook-subscription · webhook-subscription resubscribe
+                     discord channels · switch-channel · identity · set-identity
+                     discord events · create-event · delete-event
+                     discord members · roles · assign-role · unassign-role · dm
+                     gbp location · update-location · attributes · update-attributes
+                     gbp menus · replace-menus · services · replace-services
+                     gbp media · add-media · delete-media
+                     gbp place-actions · add-place-action · update-place-action
+                     gbp delete-place-action
+                     gbp verification · start-verification · complete-verification
+                     gbp performance · keywords · assign
+                     pinterest boards · create-board
+                     youtube playlists · create-playlist · set-default-playlist
+                     youtube captions · transcript
+                     bluesky languages · set-languages
+                     tiktok creator-info · music · locations · video
+                     instagram audio · publishing-limit · stories
+                     linkedin mentions
 fopost account-groups list · get · create · rename · set-members · delete
 fopost posts         list · get · create · publish · cancel · delete
                      duplicate · preflight · deliveries
 fopost media         list · upload · delete
 fopost labels        list · create · delete
+fopost contacts      list · get · conversations · import · delete
+fopost broadcasts    list · get · create · send · cancel · recipients · delete
+fopost sequences     list · get · create · enroll · unenroll · enrollments · pause · resume · delete
+                     fields list · fields delete
+fopost knowledge     list · add · sync · delete · search
 fopost analytics     overview · top-posts · time-series
 fopost automations   list · get · toggle · trigger · runs
 fopost webhooks      list · create · test · delete
 fopost ads           tree · pause · resume · insights · leads
+fopost activity      list · audit
+fopost ads           tree · pause · resume · insights · leads · catalogs · library
 fopost completion    bash · zsh · fish · powershell
 fopost version
 ```
@@ -239,6 +265,17 @@ from 500 ms capped at 60 s, retrying only `429`, `5xx`, and network failures, an
 honouring `Retry-After`. When the retries are exhausted the CLI prints the reason
 and exits `7` or `9`, so a script can back off on its own terms.
 
+## Chatbots and the inbox
+
+The [chat adapter](https://fopost.com/docs/sdks/chat-adapter) turns the FoPost inbox into one
+send/receive channel for a chatbot framework. It ships in the TypeScript and Python SDKs.
+
+There is no `fopost inbox` command, and none is planned: answering a direct message is a
+long-running service, not a shell invocation. A bot belongs in a program, built on
+[`fopost-go`](https://github.com/fopost/fopost-go), which this CLI is built on, or on one of the
+other [SDKs](https://fopost.com/docs/sdks/overview). No API change sits behind the adapter, so
+every client can do the same thing.
+
 ## Support
 
 - Documentation: <https://fopost.com/docs>
@@ -248,3 +285,22 @@ and exits `7` or `9`, so a script can back off on its own terms.
 ## License
 
 MIT © Porter Bridge, LLC. See [LICENSE](LICENSE).
+
+### Google Ads
+
+`fopost ads google` covers the Search surface no other network has. Every command names
+the connection and the Google Ads account:
+
+```bash
+fopost ads google keywords --connection c4d5e6f7-… --customer 1234567890
+fopost ads google keyword-ideas --connection c4d5e6f7-… --customer 1234567890 --seed "running shoes"
+fopost ads google search-terms --connection c4d5e6f7-… --customer 1234567890 --since 2026-09-01 --until 2026-09-20
+fopost ads google assets --connection c4d5e6f7-… --customer 1234567890
+fopost ads google asset-groups --connection c4d5e6f7-… --customer 1234567890
+fopost ads google conversions --connection c4d5e6f7-… --customer 1234567890
+fopost ads google query --connection c4d5e6f7-… --customer 1234567890 \
+  'SELECT campaign.name, metrics.clicks FROM campaign WHERE segments.date DURING LAST_30_DAYS'
+```
+
+`--customer` has to name an account the connection's grant reaches; any other answers
+404. The other `fopost ads` commands work across networks and dispatch by connection.
