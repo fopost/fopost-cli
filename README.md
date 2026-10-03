@@ -240,9 +240,8 @@ fopost knowledge     list · add · sync · delete · search
 fopost analytics     overview · top-posts · time-series
 fopost automations   list · get · toggle · trigger · runs
 fopost webhooks      list · create · test · delete
-fopost ads           tree · pause · resume · insights · leads
 fopost activity      list · audit
-fopost ads           tree · pause · resume · insights · leads · catalogs · library
+fopost ads           networks · tree · pause · resume · insights · leads · catalogs · library
 fopost completion    bash · zsh · fish · powershell
 fopost version
 ```

@@ -9,6 +9,8 @@ github.com/fopost/fopost-go v0.2.1-0.20260920195809-0f2a3f293638 h1:HyHOHnuVqcv8
 github.com/fopost/fopost-go v0.2.1-0.20260920195809-0f2a3f293638/go.mod h1:Qz+7UCYTBnDEeZqB3VMrePxmYLVR9rFvx3+QWcKND8Q=
 github.com/fopost/fopost-go v0.2.1-0.20261003215548-65ec0bbbe207 h1:mHYksMJZWjyhMiJPmJOxa4fxvjUyaBkYjog9GWM+MnU=
 github.com/fopost/fopost-go v0.2.1-0.20261003215548-65ec0bbbe207/go.mod h1:Qz+7UCYTBnDEeZqB3VMrePxmYLVR9rFvx3+QWcKND8Q=
+github.com/fopost/fopost-go v0.2.1-0.20261003222702-faf657bdaf90 h1:vzeOG95v+uy3sTuLYiv0PdDAIGMBGNofSD/NTB0hQ1o=
+github.com/fopost/fopost-go v0.2.1-0.20261003222702-faf657bdaf90/go.mod h1:Qz+7UCYTBnDEeZqB3VMrePxmYLVR9rFvx3+QWcKND8Q=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
