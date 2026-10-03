@@ -18,6 +18,8 @@ func newAdsGoogleCmd(state *State) *cobra.Command {
 			"insights are on the other ads commands and work across networks.",
 	}
 	cmd.AddCommand(
+		newGoogleRecommendationsCmd(state),
+		newGoogleOptimizationScoreCmd(state),
 		newGoogleKeywordsCmd(state),
 		newGoogleKeywordIdeasCmd(state),
 		newGoogleSearchTermsCmd(state),
@@ -352,4 +354,150 @@ func newGoogleQueryCmd(state *State) *cobra.Command {
 	}
 	flags.bind(cmd)
 	return cmd
+}
+
+func newGoogleRecommendationsCmd(state *State) *cobra.Command {
+	flags := &googleFlags{}
+	var types []string
+	var apply, dismiss []string
+	var yes bool
+	cmd := &cobra.Command{
+		Use:   "recommendations",
+		Short: "Read, apply or dismiss what Google suggests for the account",
+		Long: "Without --apply or --dismiss this lists what Google suggests, with the\n" +
+			"impact it projects. Applying one changes what the live account serves or bids.",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			scope, err := flags.scope(state)
+			if err != nil {
+				return err
+			}
+			printer := state.Printer()
+
+			if len(apply) > 0 && len(dismiss) > 0 {
+				return usageErrorf("give --apply or --dismiss, not both")
+			}
+
+			if len(apply) > 0 || len(dismiss) > 0 {
+				ids := apply
+				verb := "Applied"
+				run := client.GoogleAds.ApplyRecommendations
+				if len(dismiss) > 0 {
+					ids, verb, run = dismiss, "Dismissed", client.GoogleAds.DismissRecommendations
+				}
+				if !yes {
+					if err := confirm(state, fmt.Sprintf(
+						"%s %d recommendation(s) on %s?", verb, len(ids), flags.customer)); err != nil {
+						return err
+					}
+				}
+				count, err := run(cmd.Context(), &fopost.GoogleRecommendationsRequest{
+					GoogleScope: scope,
+					IDs:         ids,
+				})
+				if err != nil {
+					return err
+				}
+				return printer.Value(map[string]int{strings.ToLower(verb): count}, func() {
+					printer.Success("%s %d recommendation(s)", verb, count)
+				})
+			}
+
+			rows, err := client.GoogleAds.Recommendations(cmd.Context(), scope, types)
+			if err != nil {
+				return err
+			}
+			return printer.Value(rows, func() {
+				table := [][]string{}
+				for _, row := range rows {
+					table = append(table, []string{
+						row.ID,
+						row.Type,
+						deltaOf(impactClicks(row)),
+						deltaOf(impactConversions(row)),
+					})
+				}
+				printer.Table([]string{"id", "type", "clicks", "conversions"}, table)
+			})
+		},
+	}
+	flags.bind(cmd)
+	cmd.Flags().StringSliceVar(&types, "type", nil, "Limit to a recommendation type; repeatable")
+	cmd.Flags().StringSliceVar(&apply, "apply", nil, "Apply this recommendation id; repeatable")
+	cmd.Flags().StringSliceVar(&dismiss, "dismiss", nil, "Dismiss this recommendation id; repeatable")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")
+	return cmd
+}
+
+func impactClicks(row fopost.GoogleRecommendation) (*float64, *float64) {
+	if row.Impact == nil {
+		return nil, nil
+	}
+	return row.Impact.BaseClicks, row.Impact.PotentialClicks
+}
+
+func impactConversions(row fopost.GoogleRecommendation) (*float64, *float64) {
+	if row.Impact == nil {
+		return nil, nil
+	}
+	return row.Impact.BaseConversions, row.Impact.PotentialConversions
+}
+
+// deltaOf renders what applying a recommendation would move the metric by.
+func deltaOf(base, potential *float64) string {
+	if base == nil || potential == nil {
+		return "-"
+	}
+	change := *potential - *base
+	if change >= 0 {
+		return fmt.Sprintf("+%.1f", change)
+	}
+	return fmt.Sprintf("%.1f", change)
+}
+
+func newGoogleOptimizationScoreCmd(state *State) *cobra.Command {
+	flags := &googleFlags{}
+	cmd := &cobra.Command{
+		Use:   "optimization-score",
+		Short: "Read the account's optimization score and each campaign's",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			scope, err := flags.scope(state)
+			if err != nil {
+				return err
+			}
+			score, err := client.GoogleAds.OptimizationScore(cmd.Context(), scope)
+			if err != nil {
+				return err
+			}
+			printer := state.Printer()
+			return printer.Value(score, func() {
+				printer.Line("Account: %s", percentOf(score.Score))
+				rows := [][]string{}
+				for _, campaign := range score.Campaigns {
+					rows = append(rows, []string{
+						campaign.ID,
+						output.Truncate(campaign.Name, 40),
+						percentOf(campaign.Score),
+					})
+				}
+				printer.Table([]string{"id", "campaign", "score"}, rows)
+			})
+		},
+	}
+	flags.bind(cmd)
+	return cmd
+}
+
+func percentOf(score *float64) string {
+	if score == nil {
+		return "-"
+	}
+	return fmt.Sprintf("%.0f%%", *score*100)
 }
