@@ -105,9 +105,16 @@ fopost posts deliveries post_7d2a
 
 `--schedule-at` reads RFC 3339 (`2026-09-01T09:00:00Z`) or a plain
 `"2026-09-01 09:00"` in your local timezone. Files passed with `--media` are
-uploaded to the workspace's media library first, then attached.
-`fopost media upload --direct <file>` sends each file straight to storage
-through a presigned URL instead of through the API.
+uploaded to the workspace's media library first, then attached. Files passed
+with `--file` (up to five) travel with the post itself; one over the multipart
+ceiling goes straight to storage first and is attached by URL, so the command
+reads the same either way.
+
+`fopost media limits` prints the largest file the account may upload, which
+grows with the number of connected accounts or the Large Uploads add-on, and
+the per-file ceiling of a multipart request. `fopost media upload` reads the
+same ceiling and sends anything over it straight to storage through a
+presigned URL; `--direct` forces that route for every file.
 
 To send something out now, create and publish in one step:
 
@@ -230,7 +237,7 @@ fopost accounts      list · get · rename · move · health · metrics · valid
 fopost account-groups list · get · create · rename · set-members · delete
 fopost posts         list · get · create · publish · cancel · delete
                      duplicate · preflight · deliveries
-fopost media         list · upload · delete
+fopost media         list · limits · upload · delete
 fopost labels        list · create · delete
 fopost contacts      list · get · conversations · import · delete
 fopost broadcasts    list · get · create · send · cancel · recipients · delete

@@ -2,9 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"mime"
 	"os"
-	"path/filepath"
+	"strings"
 
 	"github.com/fopost/fopost-go"
 	"github.com/spf13/cobra"
@@ -19,7 +18,7 @@ func newMediaCmd(state *State) *cobra.Command {
 		Use:   "media",
 		Short: "List, upload, and remove media library assets",
 	}
-	cmd.AddCommand(newMediaListCmd(state), newMediaUploadCmd(state), newMediaDeleteCmd(state))
+	cmd.AddCommand(newMediaListCmd(state), newMediaLimitsCmd(state), newMediaUploadCmd(state), newMediaDeleteCmd(state))
 	return cmd
 }
 
@@ -59,6 +58,56 @@ func newMediaListCmd(state *State) *cobra.Command {
 	}
 }
 
+func newMediaLimitsCmd(state *State) *cobra.Command {
+	return &cobra.Command{
+		Use:   "limits",
+		Short: "Show the largest file the account may upload",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			resolved, err := state.Resolved()
+			if err != nil {
+				return err
+			}
+			limits, err := client.Media.Limits(cmd.Context(), resolved.Workspace)
+			if err != nil {
+				return err
+			}
+			printer := state.Printer()
+			return printer.Value(limits, func() {
+				nextTier := "-"
+				if limits.NextTier != nil {
+					nextTier = humanSize(limits.NextTier.MaxFileBytes)
+					if limits.NextTier.UpToAccounts != nil {
+						nextTier += fmt.Sprintf(" up to %d accounts", *limits.NextTier.UpToAccounts)
+					}
+				}
+				printer.Fields([][2]string{
+					{"Max File", humanSize(limits.MaxFileBytes)},
+					{"Source", limits.Source},
+					{"Connected Accounts", itoa(limits.ConnectedAccounts)},
+					{"Large Uploads", yesNo(limits.LargeUploadsEnabled)},
+					{"Next Tier", nextTier},
+					{"Multipart Max File", humanSize(limits.MultipartMaxFileBytes)},
+					{"Max Files Per Upload", itoa(limits.MaxFilesPerUpload)},
+					{"Direct Upload", yesNo(limits.DirectUploadAvailable)},
+					{"Allowed Types", output.Dash(strings.Join(limits.AllowedTypes, ", "))},
+				})
+			})
+		},
+	}
+}
+
+func yesNo(value bool) string {
+	if value {
+		return "yes"
+	}
+	return "no"
+}
+
 func newMediaUploadCmd(state *State) *cobra.Command {
 	var direct bool
 	cmd := &cobra.Command{
@@ -74,14 +123,28 @@ func newMediaUploadCmd(state *State) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			var uploaded []fopost.UploadedMedia
+			small, large := args, []string(nil)
 			if direct {
-				uploaded, err = uploadFilesDirect(cmd, client, workspaceID, args)
+				small, large = nil, args
 			} else {
-				uploaded, err = uploadFiles(cmd, client, workspaceID, args)
+				small, large, err = splitByCeiling(cmd, client, workspaceID, args)
+				if err != nil {
+					return err
+				}
 			}
-			if err != nil {
-				return err
+			var uploaded []fopost.UploadedMedia
+			if len(small) > 0 {
+				uploaded, err = uploadFiles(cmd, client, workspaceID, small)
+				if err != nil {
+					return err
+				}
+			}
+			if len(large) > 0 {
+				streamed, err := uploadFilesDirect(cmd, client, workspaceID, large)
+				if err != nil {
+					return err
+				}
+				uploaded = append(uploaded, streamed...)
 			}
 			printer := state.Printer()
 			return printer.Value(uploaded, func() {
@@ -93,23 +156,46 @@ func newMediaUploadCmd(state *State) *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&direct, "direct", false, "upload each file straight to storage through a presigned URL")
+	cmd.Flags().BoolVar(&direct, "direct", false, "send every file straight to storage through a presigned URL, whatever its size")
 	return cmd
 }
 
-// uploadFilesDirect presigns, PUTs, and completes one file at a time.
+// splitByCeiling sorts paths into those a multipart request can carry and
+// those that must go direct, reading the ceiling from the API once.
+func splitByCeiling(cmd *cobra.Command, client *fopost.Client, workspaceID string, paths []string) (small, large []string, err error) {
+	ceiling := fopost.DefaultMultipartMaxFileBytes
+	if limits, err := client.Media.Limits(cmd.Context(), workspaceID); err == nil && limits.MultipartMaxFileBytes > 0 {
+		ceiling = limits.MultipartMaxFileBytes
+	}
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil {
+			return nil, nil, fmt.Errorf("reading %s: %w", path, err)
+		}
+		if info.Size() > ceiling {
+			large = append(large, path)
+		} else {
+			small = append(small, path)
+		}
+	}
+	return small, large, nil
+}
+
+// uploadFilesDirect presigns, streams, and completes one file at a time.
 func uploadFilesDirect(cmd *cobra.Command, client *fopost.Client, workspaceID string, paths []string) ([]fopost.UploadedMedia, error) {
 	uploaded := make([]fopost.UploadedMedia, 0, len(paths))
 	for _, path := range paths {
-		data, err := os.ReadFile(path)
+		file, err := fopost.OpenPostFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("reading %s: %w", path, err)
+			return nil, err
 		}
-		mimeType := mime.TypeByExtension(filepath.Ext(path))
-		if mimeType == "" {
-			mimeType = "application/octet-stream"
-		}
-		asset, err := client.Media.UploadDirect(cmd.Context(), workspaceID, filepath.Base(path), mimeType, data)
+		asset, err := client.Media.UploadDirect(cmd.Context(), &fopost.PresignInput{
+			WorkspaceID: workspaceID,
+			Filename:    file.Filename,
+			MimeType:    file.MIMEType,
+			Size:        file.Size,
+		}, file.Reader)
+		file.Close()
 		if err != nil {
 			return nil, err
 		}
