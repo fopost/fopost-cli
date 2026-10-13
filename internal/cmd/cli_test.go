@@ -1277,3 +1277,53 @@ func TestMediaUploadSendsFilesOverTheCeilingDirect(t *testing.T) {
 		t.Fatalf("result = %v (%v)", result, err)
 	}
 }
+
+func TestPostsCreateWithFileSendsItWithThePost(t *testing.T) {
+	isolate(t)
+
+	mediaFile := filepath.Join(t.TempDir(), "card.png")
+	if err := os.WriteFile(mediaFile, []byte("\x89PNG\r\n\x1a\n fake"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var postField string
+	var partNames []string
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/media/limits":
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"maxFileBytes": 104857600, "multipartMaxFileBytes": 104857600}})
+		case r.Method == http.MethodPost && r.URL.Path == "/posts":
+			if err := r.ParseMultipartForm(1 << 20); err != nil {
+				t.Errorf("the post was not multipart: %v", err)
+				return
+			}
+			postField = r.FormValue("post")
+			for _, header := range r.MultipartForm.File["files"] {
+				partNames = append(partNames, header.Filename)
+			}
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"id": "post_1", "status": "draft"}})
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"error":"not_found","message":"no"}`))
+		}
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL, Workspace: "ws_1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "posts", "create", "--account", "acc_1", "--text", "Shipping today", "--file", mediaFile, "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	if got := api.paths(); strings.Join(got, ",") != "GET /media/limits,POST /posts" {
+		t.Fatalf("requests = %v, want no separate upload", got)
+	}
+	var body map[string]any
+	if err := json.Unmarshal([]byte(postField), &body); err != nil || body["workspace_id"] != "ws_1" {
+		t.Fatalf("post field = %q (%v)", postField, err)
+	}
+	if strings.Join(partNames, ",") != "card.png" {
+		t.Fatalf("file parts = %v", partNames)
+	}
+}
