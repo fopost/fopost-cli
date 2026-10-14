@@ -57,6 +57,8 @@ func newFakeAPI(t *testing.T, handler func(w http.ResponseWriter, r *http.Reques
 	api.mu <- struct{}{}
 	api.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
+		// Hand the handler a fresh body so it can parse a multipart form itself.
+		r.Body = io.NopCloser(bytes.NewReader(raw))
 		body := map[string]any{}
 		if len(raw) > 0 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
 			_ = json.Unmarshal(raw, &body)
@@ -1174,5 +1176,154 @@ func TestAdsCommentsReadsAPageAndTheWritesCarryTheAd(t *testing.T) {
 	// The ad travels in the body, because the path already carries the comment.
 	if del := api.find(t, http.MethodDelete, "/ads/comments/cm_1"); del.Body["adId"] != "ad_1" {
 		t.Fatalf("body = %v", del.Body)
+	}
+}
+
+func TestMediaLimitsPassesTheWorkspaceAndEmitsJSON(t *testing.T) {
+	isolate(t)
+
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/media/limits" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+			"maxFileBytes": 419430400, "source": "accounts", "connectedAccounts": 4,
+			"largeUploadsEnabled": false, "nextTier": map[string]any{"upToAccounts": 15, "maxFileBytes": 2147483648},
+			"multipartMaxFileBytes": 104857600, "maxFilesPerUpload": 5, "directUploadAvailable": true,
+			"allowedTypes": []string{"image/png"},
+		}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "media", "limits", "--workspace", "ws_7", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	if got := api.find(t, http.MethodGet, "/media/limits").Query.Get("workspaceId"); got != "ws_7" {
+		t.Fatalf("workspaceId = %q, want the flag's workspace", got)
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("--json output is not valid JSON: %v\n%s", err, stdout)
+	}
+	if result["maxFileBytes"] != float64(419430400) || result["multipartMaxFileBytes"] != float64(104857600) {
+		t.Fatalf("result = %v", result)
+	}
+
+	stdout, _, code = run(t, "", "media", "limits")
+	if code != ExitOK || !strings.Contains(stdout, "400.0 MB") || !strings.Contains(stdout, "2.0 GB up to 15 accounts") {
+		t.Fatalf("table output = %q (exit %d)", stdout, code)
+	}
+}
+
+func TestMediaUploadSendsFilesOverTheCeilingDirect(t *testing.T) {
+	isolate(t)
+
+	dir := t.TempDir()
+	small := filepath.Join(dir, "small.png")
+	big := filepath.Join(dir, "big.mp4")
+	if err := os.WriteFile(small, []byte("tiny"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(big, []byte("twelve bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var api *fakeAPI
+	var putLength int64
+	api = newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/media/limits":
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"maxFileBytes": 5368709120, "multipartMaxFileBytes": 8}})
+		case r.Method == http.MethodPost && r.URL.Path == "/media/upload":
+			json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"id": "med_small", "type": "image", "name": "small.png", "size": 4}}})
+		case r.Method == http.MethodPost && r.URL.Path == "/media/presign":
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+				"uploadId": "up_1", "uploadUrl": api.URL + "/blob/up_1", "method": "PUT", "headers": map[string]string{}, "maxFileBytes": 5368709120,
+			}})
+		case r.Method == http.MethodPut && r.URL.Path == "/blob/up_1":
+			putLength = r.ContentLength
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodPost && r.URL.Path == "/media/presign/up_1/complete":
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"id": "med_big", "type": "video", "name": "big.mp4", "size": 12}})
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"error":"not_found","message":"no"}`))
+		}
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL, Workspace: "ws_1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "media", "upload", small, big, "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	want := []string{"GET /media/limits", "POST /media/upload", "POST /media/presign", "PUT /blob/up_1", "POST /media/presign/up_1/complete"}
+	if got := api.paths(); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("requests = %v, want %v", got, want)
+	}
+	if presign := api.find(t, http.MethodPost, "/media/presign"); presign.Body["filename"] != "big.mp4" || presign.Body["size"] != float64(12) {
+		t.Fatalf("presign body = %v, want only the large file", presign.Body)
+	}
+	if putLength != 12 {
+		t.Fatalf("PUT length = %d, want the file's 12 bytes", putLength)
+	}
+	var result []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil || len(result) != 2 || result[0]["id"] != "med_small" || result[1]["id"] != "med_big" {
+		t.Fatalf("result = %v (%v)", result, err)
+	}
+}
+
+func TestPostsCreateWithFileSendsItWithThePost(t *testing.T) {
+	isolate(t)
+
+	mediaFile := filepath.Join(t.TempDir(), "card.png")
+	if err := os.WriteFile(mediaFile, []byte("\x89PNG\r\n\x1a\n fake"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var postField string
+	var partNames []string
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/media/limits":
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"maxFileBytes": 104857600, "multipartMaxFileBytes": 104857600}})
+		case r.Method == http.MethodPost && r.URL.Path == "/posts":
+			if err := r.ParseMultipartForm(1 << 20); err != nil {
+				t.Errorf("the post was not multipart: %v", err)
+				return
+			}
+			postField = r.FormValue("post")
+			for _, header := range r.MultipartForm.File["files"] {
+				partNames = append(partNames, header.Filename)
+			}
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"id": "post_1", "status": "draft"}})
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"error":"not_found","message":"no"}`))
+		}
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL, Workspace: "ws_1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "posts", "create", "--account", "acc_1", "--text", "Shipping today", "--file", mediaFile, "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	if got := api.paths(); strings.Join(got, ",") != "GET /media/limits,POST /posts" {
+		t.Fatalf("requests = %v, want no separate upload", got)
+	}
+	var body map[string]any
+	if err := json.Unmarshal([]byte(postField), &body); err != nil || body["workspace_id"] != "ws_1" {
+		t.Fatalf("post field = %q (%v)", postField, err)
+	}
+	if strings.Join(partNames, ",") != "card.png" {
+		t.Fatalf("file parts = %v", partNames)
 	}
 }
