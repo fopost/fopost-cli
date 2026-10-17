@@ -309,6 +309,36 @@ func TestBlogArticlesPublishPromptsUnlessYes(t *testing.T) {
 	}
 }
 
+func TestBlogArticlesSubmitSendsItForApproval(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/blog/articles/art_2/submit" {
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]any{"error": "invalid_status", "message": "Only a draft, failed or rejected article can be submitted"})
+			return
+		}
+		json.NewEncoder(w).Encode(articleJSON("in_review"))
+	})
+	configured(t, api.URL)
+
+	stdout, stderr, code := run(t, "", "blog", "articles", "submit", "art_1", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d\n%s%s", code, stdout, stderr)
+	}
+	sent := api.find(t, "POST", "/blog/articles/art_1/submit")
+	if sent.Query.Get("workspaceId") != "ws_1" {
+		t.Fatalf("query = %v", sent.Query)
+	}
+	if !strings.Contains(stdout, `"in_review"`) {
+		t.Fatalf("submit --json did not print the article:\n%s", stdout)
+	}
+
+	stdout, _, code = run(t, "", "blog", "articles", "submit", "art_2")
+	if code == ExitOK || stdout != "" {
+		t.Fatalf("a refused submit exit = %d, stdout = %q", code, stdout)
+	}
+}
+
 func TestBlogArticlesEditReadsTheBodyFromStdin(t *testing.T) {
 	isolate(t)
 	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {

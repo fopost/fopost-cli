@@ -23,7 +23,8 @@ func newBlogCmd(state *State) *cobra.Command {
 		Long: "Plan keywords, write articles and publish them to a website.\n\n" +
 			"A post goes to a social network; an article goes to a website. Planning " +
 			"keywords, requesting an article and regenerating one spend AI credits. " +
-			"Nothing publishes until `blog articles publish` is run.",
+			"A written article is a draft until `blog articles submit` sends it for " +
+			"approval, and nothing publishes until `blog articles publish` is run.",
 	}
 	cmd.AddCommand(
 		newBlogSettingsCmd(state),
@@ -554,6 +555,7 @@ func newBlogArticlesCmd(state *State) *cobra.Command {
 		newBlogArticlesGetCmd(state),
 		newBlogArticlesEditCmd(state),
 		newBlogArticlesRegenerateCmd(state),
+		newBlogArticlesSubmitCmd(state),
 		newBlogArticlesPublishCmd(state),
 		newBlogArticlesRejectCmd(state),
 		newBlogArticlesDeleteCmd(state),
@@ -609,7 +611,7 @@ func newBlogArticlesListCmd(state *State) *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringSliceVar(&status, "status", nil, "queued, writing, draft, scheduled, publishing, published, failed, or rejected; repeatable")
+	cmd.Flags().StringSliceVar(&status, "status", nil, "queued, writing, draft, in_review, scheduled, publishing, published, failed, or rejected; repeatable")
 	cmd.Flags().IntVar(&limit, "limit", 0, "most articles to return")
 	return cmd
 }
@@ -740,8 +742,9 @@ func newBlogArticlesEditCmd(state *State) *cobra.Command {
 		Use:   "edit <article-id>",
 		Short: "Edit a draft; only the flags given are sent",
 		Long: "Edit a draft; only the flags given are sent. An article still being written " +
-			"or already published cannot be edited. --publish-at puts the draft on the " +
-			"calendar without publishing it now.",
+			"or already published cannot be edited. --publish-at puts an article that is " +
+			"in review on the calendar without publishing it now; a draft must be " +
+			"submitted first.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().NFlag() == 0 {
@@ -829,13 +832,40 @@ func newBlogArticlesRegenerateCmd(state *State) *cobra.Command {
 	}
 }
 
+func newBlogArticlesSubmitCmd(state *State) *cobra.Command {
+	return &cobra.Command{
+		Use:   "submit <article-id>",
+		Short: "Send a draft, failed or rejected article for approval",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			workspaceID, err := state.WorkspaceID("")
+			if err != nil {
+				return err
+			}
+			article, err := client.Blog.SubmitArticle(cmd.Context(), workspaceID, args[0])
+			if err != nil {
+				return err
+			}
+			printer := state.Printer()
+			return printer.Value(article, func() {
+				printer.Success("Submitted article %s for approval.", article.ID)
+			})
+		},
+	}
+}
+
 func newBlogArticlesPublishCmd(state *State) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
 		Use:   "publish <article-id>",
 		Short: "Publish an article to the configured target",
-		Long: "Publish an article to the configured target. The settings must name a " +
-			"target first; without one the API answers no_target.",
+		Long: "Publish an article to the configured target. The article must be in " +
+			"review; run `blog articles submit` on a draft first. The settings must name " +
+			"a target; without one the API answers no_target.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !yes {
