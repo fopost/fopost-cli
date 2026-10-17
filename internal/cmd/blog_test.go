@@ -171,7 +171,8 @@ func TestBlogKeywordsListFiltersByStatus(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{
 			"id": "kw_1", "keyword": "best trail shoes", "searchVolume": 4400, "difficulty": 38,
 			"cpc": 1.25, "intent": "commercial", "source": "planner", "status": "planned",
-			"plannedFor": "2026-10-20", "createdAt": "2026-10-11T10:00:00.000Z",
+			"plannedFor": "2026-10-20", "fitReason": "Buyers compare before signing up",
+			"createdAt": "2026-10-11T10:00:00.000Z",
 		}}})
 	})
 	configured(t, api.URL)
@@ -186,6 +187,53 @@ func TestBlogKeywordsListFiltersByStatus(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "best trail shoes") || !strings.Contains(stdout, "4400") {
 		t.Fatalf("list did not print the keyword:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Buyers compare before signing up") {
+		t.Fatalf("list did not print the fit reason:\n%s", stdout)
+	}
+}
+
+func TestBlogKeywordsSuggestSendsSeedsAndPrompt(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"seeds": []string{"trail running shoes", "trail shoe sizing"}})
+	})
+	configured(t, api.URL)
+
+	stdout, stderr, code := run(t, "", "blog", "keywords", "suggest",
+		"--seed", "trail shoes", "--seed", "hydration", "--prompt", "Lean towards beginners")
+	if code != ExitOK {
+		t.Fatalf("exit = %d\n%s%s", code, stdout, stderr)
+	}
+	sent := api.find(t, "POST", "/blog/keywords/suggest")
+	seeds, _ := sent.Body["seeds"].([]any)
+	if sent.Body["workspaceId"] != "ws_1" || len(seeds) != 2 || seeds[1] != "hydration" || sent.Body["prompt"] != "Lean towards beginners" {
+		t.Fatalf("body = %v", sent.Body)
+	}
+	if !strings.Contains(stdout, "trail running shoes\ntrail shoe sizing") {
+		t.Fatalf("suggest did not print one term per line:\n%s", stdout)
+	}
+
+	stdout, _, code = run(t, "", "blog", "keywords", "suggest", "--json")
+	if code != ExitOK || !strings.Contains(stdout, `"seeds"`) {
+		t.Fatalf("suggest --json (exit %d):\n%s", code, stdout)
+	}
+}
+
+func TestBlogKeywordsSuggestMapsAnEmptyBalanceToItsExitCode(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusPaymentRequired)
+		json.NewEncoder(w).Encode(map[string]any{"error": "insufficient_credits", "message": "Balance ran out"})
+	})
+	configured(t, api.URL)
+
+	stdout, _, code := run(t, "", "blog", "keywords", "suggest")
+	if code != ExitPaymentRequired {
+		t.Fatalf("exit = %d, want %d", code, ExitPaymentRequired)
+	}
+	if stdout != "" {
+		t.Fatalf("a failed suggest wrote to stdout: %q", stdout)
 	}
 }
 

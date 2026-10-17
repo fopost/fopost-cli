@@ -290,6 +290,7 @@ func newBlogKeywordsCmd(state *State) *cobra.Command {
 	}
 	cmd.AddCommand(
 		newBlogKeywordsListCmd(state),
+		newBlogKeywordsSuggestCmd(state),
 		newBlogKeywordsPlanCmd(state),
 		newBlogKeywordsAddCmd(state),
 		newBlogKeywordsUpdateCmd(state),
@@ -319,10 +320,11 @@ func keywordRow(keyword fopost.BlogKeyword) []string {
 		cpc,
 		strOrDash(keyword.Intent),
 		strOrDash(keyword.PlannedFor),
+		output.Truncate(strOrDash(keyword.FitReason), 48),
 	}
 }
 
-var keywordHeaders = []string{"id", "keyword", "status", "volume", "difficulty", "cpc", "intent", "planned"}
+var keywordHeaders = []string{"id", "keyword", "status", "volume", "difficulty", "cpc", "intent", "planned", "fit reason"}
 
 func newBlogKeywordsListCmd(state *State) *cobra.Command {
 	var status []string
@@ -362,6 +364,47 @@ func newBlogKeywordsListCmd(state *State) *cobra.Command {
 	return cmd
 }
 
+func newBlogKeywordsSuggestCmd(state *State) *cobra.Command {
+	var seeds []string
+	var prompt string
+	cmd := &cobra.Command{
+		Use:   "suggest",
+		Short: "Suggest search terms from the blog goal and topics; uses AI credits",
+		Long: "Suggest about ten search terms from the blog goal and topics; uses AI " +
+			"credits. Pass the current terms with --seed to refine them and --prompt to " +
+			"steer. Nothing is saved; pass the terms you keep to `blog keywords plan`.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			workspaceID, err := state.WorkspaceID("")
+			if err != nil {
+				return err
+			}
+			suggested, err := client.Blog.SuggestSeeds(cmd.Context(), workspaceID, &fopost.SuggestBlogSeedsRequest{
+				Seeds:  seeds,
+				Prompt: prompt,
+			})
+			if err != nil {
+				return err
+			}
+			printer := state.Printer()
+			return printer.Value(struct {
+				Seeds []string `json:"seeds"`
+			}{suggested}, func() {
+				for _, seed := range suggested {
+					printer.Line("%s", seed)
+				}
+			})
+		},
+	}
+	cmd.Flags().StringSliceVar(&seeds, "seed", nil, "a current term to refine; repeatable, up to 20")
+	cmd.Flags().StringVar(&prompt, "prompt", "", "what to steer the suggestions towards, up to 500 characters")
+	return cmd
+}
+
 func newBlogKeywordsPlanCmd(state *State) *cobra.Command {
 	var seeds []string
 	cmd := &cobra.Command{
@@ -369,7 +412,8 @@ func newBlogKeywordsPlanCmd(state *State) *cobra.Command {
 		Short: "Research keywords in the background; uses AI credits",
 		Long: "Research keywords in the background; uses AI credits. With no --seed the " +
 			"research starts from the topic in the settings. New keywords arrive as " +
-			"suggested; run `blog keywords list` to see them.",
+			"suggested and nothing is put on the calendar; run `blog keywords list` to " +
+			"see them and `blog keywords update <id> --status planned` to pick one.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			client, err := state.Client()
@@ -459,7 +503,7 @@ func newBlogKeywordsUpdateCmd(state *State) *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringVar(&status, "status", "", "suggested, planned, written, or dismissed")
+	cmd.Flags().StringVar(&status, "status", "", "suggested, planned, written, or dismissed; planned picks it for the next free date")
 	cmd.Flags().StringVar(&plannedFor, "planned-for", "", "the day to write it, as YYYY-MM-DD; empty clears it")
 	return cmd
 }
