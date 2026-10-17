@@ -176,6 +176,7 @@ type createOptions struct {
 	text       string
 	textFile   string
 	media      []string
+	files      []string
 	scheduleAt string
 	draft      bool
 	publish    bool
@@ -196,7 +197,8 @@ func newPostsCreateCmd(state *State) *cobra.Command {
 		Short: "Create a draft or scheduled post, optionally publishing it",
 		Long: "Creates a post from --text, a file, or standard input.\n\n" +
 			"Local files given with --media are uploaded to the workspace's media library\n" +
-			"first and attached to the post. Without --schedule-at or --publish the post is\n" +
+			"first and attached to the post; --file sends them with the post itself, going\n" +
+			"through direct upload when a file is over the multipart ceiling. Without --schedule-at or --publish the post is\n" +
 			"created as a draft; nothing reaches a platform until it is published or its\n" +
 			"scheduled time arrives.",
 		Example: strings.Join([]string{
@@ -215,6 +217,7 @@ func newPostsCreateCmd(state *State) *cobra.Command {
 	flags.StringVar(&opts.text, "text", "", "post text")
 	flags.StringVar(&opts.textFile, "text-file", "", "read the post text from a file, or \"-\" for stdin")
 	flags.StringArrayVar(&opts.media, "media", nil, "local file to upload and attach (repeatable)")
+	flags.StringArrayVar(&opts.files, "file", nil, "local file to send with the post (repeatable, up to 5)")
 	flags.StringVar(&opts.scheduleAt, "schedule-at", "", "when to publish, RFC 3339 or \"2026-09-01 09:00\" in local time")
 	flags.BoolVar(&opts.draft, "draft", false, "save as a draft (the default when no schedule is given)")
 	flags.BoolVar(&opts.publish, "publish", false, "publish immediately after creating")
@@ -238,8 +241,8 @@ func runPostsCreate(cmd *cobra.Command, state *State, opts *createOptions) error
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(text) == "" && len(opts.media) == 0 {
-		return usageErrorf("a post needs text or media. Pass --text, --text-file, or --media")
+	if strings.TrimSpace(text) == "" && len(opts.media) == 0 && len(opts.files) == 0 {
+		return usageErrorf("a post needs text or media. Pass --text, --text-file, --media, or --file")
 	}
 
 	scheduleAt, err := parseSchedule(opts.scheduleAt)
@@ -286,7 +289,13 @@ func runPostsCreate(cmd *cobra.Command, state *State, opts *createOptions) error
 		body.ScheduleAt = scheduleAt
 	}
 
-	post, err := client.Posts.Create(cmd.Context(), body)
+	files, closeFiles, err := openPostFiles(opts.files)
+	if err != nil {
+		return err
+	}
+	defer closeFiles()
+
+	post, err := client.Posts.Create(cmd.Context(), body, files...)
 	if err != nil {
 		return err
 	}
@@ -316,6 +325,25 @@ func runPostsCreate(cmd *cobra.Command, state *State, opts *createOptions) error
 			printer.Success("Created draft %s.", post.ID)
 		}
 	})
+}
+
+// openPostFiles opens every path for the SDK; the returned func closes them.
+func openPostFiles(paths []string) ([]fopost.PostFile, func(), error) {
+	files := make([]fopost.PostFile, 0, len(paths))
+	closeAll := func() {
+		for _, file := range files {
+			file.Close()
+		}
+	}
+	for _, path := range paths {
+		file, err := fopost.OpenPostFile(path)
+		if err != nil {
+			closeAll()
+			return nil, nil, err
+		}
+		files = append(files, *file)
+	}
+	return files, closeAll, nil
 }
 
 func uploadFiles(cmd *cobra.Command, client *fopost.Client, workspaceID string, paths []string) ([]fopost.UploadedMedia, error) {

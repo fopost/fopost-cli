@@ -105,9 +105,16 @@ fopost posts deliveries post_7d2a
 
 `--schedule-at` reads RFC 3339 (`2026-09-01T09:00:00Z`) or a plain
 `"2026-09-01 09:00"` in your local timezone. Files passed with `--media` are
-uploaded to the workspace's media library first, then attached.
-`fopost media upload --direct <file>` sends each file straight to storage
-through a presigned URL instead of through the API.
+uploaded to the workspace's media library first, then attached. Files passed
+with `--file` (up to five) travel with the post itself; one over the multipart
+ceiling goes straight to storage first and is attached by URL, so the command
+reads the same either way.
+
+`fopost media limits` prints the largest file the account may upload, which
+grows with the number of connected accounts or the Large Uploads add-on, and
+the per-file ceiling of a multipart request. `fopost media upload` reads the
+same ceiling and sends anything over it straight to storage through a
+presigned URL; `--direct` forces that route for every file.
 
 To send something out now, create and publish in one step:
 
@@ -204,20 +211,52 @@ Homebrew installs completions for you.
 ```
 fopost auth          login · status · logout
 fopost workspaces    list · get · create
-fopost accounts      list · get · rename · move · health · validate · refresh
+fopost accounts      list · get · rename · move · health · metrics · validate · refresh
                      telegram connect-code · connect-status
                      telegram commands get · set · clear
                      slack channels · members · identity · set-identity
                      reddit subreddits · rules · flairs · set-default
+                     whatsapp profile · groups · block · sandbox
+                     whatsapp templates list · create · delete
+                     whatsapp flows list · publish · responses
+                     messaging ice-breakers · persistent-menu · greeting (get · set · clear)
+                     webhook-subscription · webhook-subscription resubscribe
+                     discord channels · switch-channel · identity · set-identity
+                     discord events · create-event · delete-event
+                     discord members · roles · assign-role · unassign-role · dm
+                     gbp location · update-location · attributes · update-attributes
+                     gbp menus · replace-menus · services · replace-services
+                     gbp media · add-media · delete-media
+                     gbp place-actions · add-place-action · update-place-action
+                     gbp delete-place-action
+                     gbp verification · start-verification · complete-verification
+                     gbp performance · keywords · assign
+                     pinterest boards · create-board
+                     youtube playlists · create-playlist · set-default-playlist
+                     youtube captions · transcript
+                     bluesky languages · set-languages
+                     tiktok creator-info · music · locations · video
+                     instagram audio · publishing-limit · stories
+                     linkedin mentions
 fopost account-groups list · get · create · rename · set-members · delete
 fopost posts         list · get · create · publish · cancel · delete
                      duplicate · preflight · deliveries
-fopost media         list · upload · delete
+fopost media         list · limits · upload · delete
 fopost labels        list · create · delete
-fopost analytics     overview · top-posts · time-series
+fopost contacts      list · get · conversations · import · delete
+fopost broadcasts    list · get · create · send · cancel · recipients · delete
+fopost sequences     list · get · create · enroll · unenroll · enrollments · pause · resume · delete
+                     fields list · fields delete
+fopost knowledge     list · add · sync · delete · search
+fopost blog          settings get · set · rotate-secret · test-website
+                     keywords list · plan · add · update · delete
+                     articles list · request · get · edit · regenerate · publish · reject · delete
+fopost analytics     overview · top-posts · time-series · decay · frequency · timeline ·
+                     changes · collect-post · native-posts
 fopost automations   list · get · toggle · trigger · runs
 fopost webhooks      list · create · test · delete
-fopost ads           tree · pause · resume · insights · leads
+fopost activity      list · audit
+fopost ads           networks · tree · pause · resume · insights · leads · catalogs · library
 fopost completion    bash · zsh · fish · powershell
 fopost version
 ```
@@ -226,6 +265,32 @@ Run `fopost <command> --help` for the flags on any of them.
 
 Global flags, accepted everywhere: `--api-key`, `--base-url`, `--workspace`,
 `--timeout`, `--json`, `--quiet`, `--no-color`.
+
+## Analytics
+
+```bash
+# How long a post keeps earning, from the repeated readings of each post
+fopost analytics decay --days 30
+
+# Whether posting more earned more
+fopost analytics frequency --days 90
+
+# Every reading held for one post, by id or by permalink
+fopost analytics timeline post_1
+fopost analytics timeline 'https://x.com/acme/status/1'
+
+# Mirror the metrics into your own store; feed the cursor back as --since
+fopost analytics changes --since 2026-03-02T00:00:00Z --json
+
+# Refresh one post now instead of waiting for the next collection run
+fopost analytics collect-post post_1
+
+# Posts on an account that never went out through FoPost
+fopost analytics native-posts --account acc_1
+```
+
+`collect-post` spends the same per-user budget as a full collection run, so a
+loop over it will start answering `429`.
 
 ## Examples
 
@@ -240,6 +305,17 @@ from 500 ms capped at 60 s, retrying only `429`, `5xx`, and network failures, an
 honouring `Retry-After`. When the retries are exhausted the CLI prints the reason
 and exits `7` or `9`, so a script can back off on its own terms.
 
+## Chatbots and the inbox
+
+The [chat adapter](https://fopost.com/docs/sdks/chat-adapter) turns the FoPost inbox into one
+send/receive channel for a chatbot framework. It ships in the TypeScript and Python SDKs.
+
+There is no `fopost inbox` command, and none is planned: answering a direct message is a
+long-running service, not a shell invocation. A bot belongs in a program, built on
+[`fopost-go`](https://github.com/fopost/fopost-go), which this CLI is built on, or on one of the
+other [SDKs](https://fopost.com/docs/sdks/overview). No API change sits behind the adapter, so
+every client can do the same thing.
+
 ## Support
 
 - Documentation: <https://fopost.com/docs>
@@ -249,3 +325,22 @@ and exits `7` or `9`, so a script can back off on its own terms.
 ## License
 
 MIT © Porter Bridge, LLC. See [LICENSE](LICENSE).
+
+### Google Ads
+
+`fopost ads google` covers the Search surface no other network has. Every command names
+the connection and the Google Ads account:
+
+```bash
+fopost ads google keywords --connection c4d5e6f7-… --customer 1234567890
+fopost ads google keyword-ideas --connection c4d5e6f7-… --customer 1234567890 --seed "running shoes"
+fopost ads google search-terms --connection c4d5e6f7-… --customer 1234567890 --since 2026-09-01 --until 2026-09-20
+fopost ads google assets --connection c4d5e6f7-… --customer 1234567890
+fopost ads google asset-groups --connection c4d5e6f7-… --customer 1234567890
+fopost ads google conversions --connection c4d5e6f7-… --customer 1234567890
+fopost ads google query --connection c4d5e6f7-… --customer 1234567890 \
+  'SELECT campaign.name, metrics.clicks FROM campaign WHERE segments.date DURING LAST_30_DAYS'
+```
+
+`--customer` has to name an account the connection's grant reaches; any other answers
+404. The other `fopost ads` commands work across networks and dispatch by connection.

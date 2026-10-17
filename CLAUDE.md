@@ -101,6 +101,12 @@ resolves it normally with no shim. It is currently pinned to a pseudo-version
 because the SDK has no `v*` tag yet; once it is tagged, bump `go.mod` to the
 released version.
 
+The pin currently points at a commit on the SDK's `feature/broadcasts-sequences`
+branch, which is stacked on `feature/contacts` and is what `fopost contacts`,
+`fopost broadcasts` and `fopost sequences` need. Re-point it at `main` — or at
+the tag — once those branches merge, or a `go get -u` will silently walk it
+backwards.
+
 `go.mod` declares `go 1.22`, which is why `golang.org/x/term` is pinned to
 `v0.27.0` — from `v0.34.0` it requires a newer toolchain. CI builds on 1.22 and
 on stable, so a dependency bump that raises the floor fails there first.
