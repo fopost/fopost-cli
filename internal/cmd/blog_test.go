@@ -10,11 +10,13 @@ import (
 func blogSettingsJSON(hasSecret bool) map[string]any {
 	return map[string]any{
 		"siteUrl": "https://yourbrand.com", "topic": "Running", "audience": nil,
+		"goal": "signups", "focusTopics": "Trail gear", "avoidTopics": nil,
 		"language": "en", "locationCode": 2840, "cadencePerWeek": 2, "reviewHoldDays": 3,
-		"autoPublish": false, "imageTier": "standard", "inBodyImages": 2,
+		"imageTier": "standard", "inBodyImages": 2,
 		"minWords": 1200, "maxWords": 1800, "brandVoiceId": nil,
 		"targetKind": "website", "targetAccountId": nil, "targetPlatform": nil,
 		"websiteUrl": "https://yourbrand.com/hooks/fopost", "hasWebsiteSecret": hasSecret,
+		"planRun":              map[string]any{"status": "done", "error": nil, "added": 14, "finishedAt": "2026-10-17T08:00:00.000Z"},
 		"keywordDataAvailable": true, "updatedAt": "2026-10-11T10:00:00.000Z",
 	}
 }
@@ -33,7 +35,7 @@ func TestBlogSettingsSetSendsOnlyTheFlagsGivenAndPrintsTheSecretOnce(t *testing.
 	configured(t, api.URL)
 
 	stdout, stderr, code := run(t, "", "blog", "settings", "set",
-		"--website-url", "https://yourbrand.com/hooks/fopost", "--auto-publish=false")
+		"--website-url", "https://yourbrand.com/hooks/fopost", "--review-hold-days", "0")
 	if code != ExitOK {
 		t.Fatalf("exit = %d\n%s%s", code, stdout, stderr)
 	}
@@ -44,9 +46,9 @@ func TestBlogSettingsSetSendsOnlyTheFlagsGivenAndPrintsTheSecretOnce(t *testing.
 	if sent.Body["websiteUrl"] != "https://yourbrand.com/hooks/fopost" {
 		t.Fatalf("websiteUrl = %v", sent.Body["websiteUrl"])
 	}
-	// An explicit false still travels; an untouched field does not
-	if sent.Body["autoPublish"] != false {
-		t.Fatalf("autoPublish = %v, want false", sent.Body["autoPublish"])
+	// An explicit zero still travels; an untouched field does not
+	if sent.Body["reviewHoldDays"] != float64(0) {
+		t.Fatalf("reviewHoldDays = %v, want 0", sent.Body["reviewHoldDays"])
 	}
 	if _, ok := sent.Body["cadencePerWeek"]; ok {
 		t.Fatalf("set sent a flag that was not given: %v", sent.Body)
@@ -75,6 +77,49 @@ func TestBlogSettingsSetWithoutASecretPrintsNone(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "Trail running") && !strings.Contains(stdout, "Running") {
 		t.Fatalf("set did not print the settings:\n%s", stdout)
+	}
+}
+
+func TestBlogSettingsSetSendsTheGoalFields(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": blogSettingsJSON(false), "websiteSecret": nil})
+	})
+	configured(t, api.URL)
+
+	stdout, stderr, code := run(t, "", "blog", "settings", "set",
+		"--goal", "signups", "--focus-topics", "Trail gear", "--avoid-topics", "")
+	if code != ExitOK {
+		t.Fatalf("exit = %d\n%s%s", code, stdout, stderr)
+	}
+	sent := api.find(t, "PATCH", "/blog/settings")
+	if sent.Body["goal"] != "signups" || sent.Body["focusTopics"] != "Trail gear" {
+		t.Fatalf("body = %v", sent.Body)
+	}
+	// An explicit empty --avoid-topics clears the field rather than being dropped
+	if avoid, ok := sent.Body["avoidTopics"]; !ok || avoid != "" {
+		t.Fatalf("avoidTopics = %v (present %v), want an empty string", avoid, ok)
+	}
+	if _, ok := sent.Body["autoPublish"]; ok {
+		t.Fatalf("set sent the removed autoPublish: %v", sent.Body)
+	}
+	if !strings.Contains(stdout, "signups") || !strings.Contains(stdout, "done, 14 added") {
+		t.Fatalf("set did not print the goal and plan run:\n%s", stdout)
+	}
+}
+
+func TestBlogSettingsSetRejectsTheRemovedAutoPublishFlag(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": blogSettingsJSON(false)})
+	})
+	configured(t, api.URL)
+
+	if _, _, code := run(t, "", "blog", "settings", "set", "--auto-publish"); code == ExitOK {
+		t.Fatalf("--auto-publish exit = %d, want a failure", code)
+	}
+	if len(api.paths()) != 0 {
+		t.Fatalf("a removed flag reached the API: %v", api.paths())
 	}
 }
 
@@ -126,7 +171,8 @@ func TestBlogKeywordsListFiltersByStatus(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{
 			"id": "kw_1", "keyword": "best trail shoes", "searchVolume": 4400, "difficulty": 38,
 			"cpc": 1.25, "intent": "commercial", "source": "planner", "status": "planned",
-			"plannedFor": "2026-10-20", "createdAt": "2026-10-11T10:00:00.000Z",
+			"plannedFor": "2026-10-20", "fitReason": "Buyers compare before signing up",
+			"createdAt": "2026-10-11T10:00:00.000Z",
 		}}})
 	})
 	configured(t, api.URL)
@@ -141,6 +187,53 @@ func TestBlogKeywordsListFiltersByStatus(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "best trail shoes") || !strings.Contains(stdout, "4400") {
 		t.Fatalf("list did not print the keyword:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Buyers compare before signing up") {
+		t.Fatalf("list did not print the fit reason:\n%s", stdout)
+	}
+}
+
+func TestBlogKeywordsSuggestSendsSeedsAndPrompt(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"seeds": []string{"trail running shoes", "trail shoe sizing"}})
+	})
+	configured(t, api.URL)
+
+	stdout, stderr, code := run(t, "", "blog", "keywords", "suggest",
+		"--seed", "trail shoes", "--seed", "hydration", "--prompt", "Lean towards beginners")
+	if code != ExitOK {
+		t.Fatalf("exit = %d\n%s%s", code, stdout, stderr)
+	}
+	sent := api.find(t, "POST", "/blog/keywords/suggest")
+	seeds, _ := sent.Body["seeds"].([]any)
+	if sent.Body["workspaceId"] != "ws_1" || len(seeds) != 2 || seeds[1] != "hydration" || sent.Body["prompt"] != "Lean towards beginners" {
+		t.Fatalf("body = %v", sent.Body)
+	}
+	if !strings.Contains(stdout, "trail running shoes\ntrail shoe sizing") {
+		t.Fatalf("suggest did not print one term per line:\n%s", stdout)
+	}
+
+	stdout, _, code = run(t, "", "blog", "keywords", "suggest", "--json")
+	if code != ExitOK || !strings.Contains(stdout, `"seeds"`) {
+		t.Fatalf("suggest --json (exit %d):\n%s", code, stdout)
+	}
+}
+
+func TestBlogKeywordsSuggestMapsAnEmptyBalanceToItsExitCode(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusPaymentRequired)
+		json.NewEncoder(w).Encode(map[string]any{"error": "insufficient_credits", "message": "Balance ran out"})
+	})
+	configured(t, api.URL)
+
+	stdout, _, code := run(t, "", "blog", "keywords", "suggest")
+	if code != ExitPaymentRequired {
+		t.Fatalf("exit = %d, want %d", code, ExitPaymentRequired)
+	}
+	if stdout != "" {
+		t.Fatalf("a failed suggest wrote to stdout: %q", stdout)
 	}
 }
 
@@ -213,6 +306,36 @@ func TestBlogArticlesPublishPromptsUnlessYes(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "Publishing article art_1") {
 		t.Fatalf("publish did not confirm:\n%s", stdout)
+	}
+}
+
+func TestBlogArticlesSubmitSendsItForApproval(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/blog/articles/art_2/submit" {
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]any{"error": "invalid_status", "message": "Only a draft, failed or rejected article can be submitted"})
+			return
+		}
+		json.NewEncoder(w).Encode(articleJSON("in_review"))
+	})
+	configured(t, api.URL)
+
+	stdout, stderr, code := run(t, "", "blog", "articles", "submit", "art_1", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d\n%s%s", code, stdout, stderr)
+	}
+	sent := api.find(t, "POST", "/blog/articles/art_1/submit")
+	if sent.Query.Get("workspaceId") != "ws_1" {
+		t.Fatalf("query = %v", sent.Query)
+	}
+	if !strings.Contains(stdout, `"in_review"`) {
+		t.Fatalf("submit --json did not print the article:\n%s", stdout)
+	}
+
+	stdout, _, code = run(t, "", "blog", "articles", "submit", "art_2")
+	if code == ExitOK || stdout != "" {
+		t.Fatalf("a refused submit exit = %d, stdout = %q", code, stdout)
 	}
 }
 

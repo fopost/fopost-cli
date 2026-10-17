@@ -4,8 +4,15 @@ All notable changes to the CLI are documented here. Releases are `v<version>` ta
 
 ## Unreleased
 
+### Removed
+
+- **Breaking:** `fopost blog settings set --auto-publish` is gone, and `blog settings get` no longer shows auto publish; the API dropped the setting. `--review-hold-days` now sets how many days before its planned date a picked keyword starts being written.
+
 ### Added
 
+- `fopost blog keywords suggest` suggests search terms from the blog goal and topics (`--seed`, repeatable, and `--prompt`).
+- `fopost blog articles submit` sends a draft, failed or rejected article for approval. `blog articles publish` and `edit --publish-at` need the article in review.
+- `fopost blog settings set --goal --focus-topics --avoid-topics`; `settings get` shows the goal, the topics and the last plan run, and the keyword tables show the fit reason.
 - `fopost blog` over the Blog service: `settings get · set · rotate-secret · test-website`, `keywords list · plan · add · update · delete` and `articles list · request · get · edit · regenerate · publish · reject · delete`. `settings set` prints the website secret once when the API issues it; `articles get --body` prints the markdown; `articles publish`, `rotate-secret` and the deletes confirm unless `--yes` is passed.
 - `fopost media limits` prints the account's upload ceiling, the multipart per-file ceiling, the next tier and the allowed types.
 - `fopost media upload` reads that ceiling and sends any file over it through direct upload, streamed from disk; `--direct` still forces the route for every file.
