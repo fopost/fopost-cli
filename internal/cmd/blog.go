@@ -57,11 +57,28 @@ func strOrDash(s *string) string {
 	return output.Dash(*s)
 }
 
+func planRunText(run *fopost.BlogPlanRun) string {
+	if run == nil {
+		return "-"
+	}
+	text := run.Status
+	if run.Added != nil {
+		text += fmt.Sprintf(", %d added", *run.Added)
+	}
+	if run.Error != nil {
+		text += ": " + *run.Error
+	}
+	return text
+}
+
 func settingsRows(settings *fopost.BlogSettings) [][2]string {
 	return [][2]string{
 		{"site url", strOrDash(settings.SiteURL)},
 		{"topic", strOrDash(settings.Topic)},
 		{"audience", strOrDash(settings.Audience)},
+		{"goal", strOrDash(settings.Goal)},
+		{"focus topics", strOrDash(settings.FocusTopics)},
+		{"avoid topics", strOrDash(settings.AvoidTopics)},
 		{"language", output.Dash(settings.Language)},
 		{"location code", strconv.Itoa(settings.LocationCode)},
 		{"cadence per week", strconv.Itoa(settings.CadencePerWeek)},
@@ -74,6 +91,7 @@ func settingsRows(settings *fopost.BlogSettings) [][2]string {
 		{"target account", strOrDash(settings.TargetAccountID)},
 		{"website url", strOrDash(settings.WebsiteURL)},
 		{"website secret", map[bool]string{true: "set", false: "-"}[settings.HasWebsiteSecret]},
+		{"plan run", planRunText(settings.PlanRun)},
 		{"keyword data", strconv.FormatBool(settings.KeywordDataAvailable)},
 		{"updated", settings.UpdatedAt.String()},
 	}
@@ -106,7 +124,7 @@ func newBlogSettingsGetCmd(state *State) *cobra.Command {
 }
 
 func newBlogSettingsSetCmd(state *State) *cobra.Command {
-	var siteURL, topic, audience, language, imageTier, brandVoiceID, targetKind, targetAccountID, websiteURL string
+	var siteURL, topic, audience, goal, focusTopics, avoidTopics, language, imageTier, brandVoiceID, targetKind, targetAccountID, websiteURL string
 	var locationCode, cadencePerWeek, reviewHoldDays, inBodyImages, minWords, maxWords int
 	cmd := &cobra.Command{
 		Use:   "set",
@@ -134,6 +152,9 @@ func newBlogSettingsSetCmd(state *State) *cobra.Command {
 			setStr("site-url", siteURL, &patch.SiteURL)
 			setStr("topic", topic, &patch.Topic)
 			setStr("audience", audience, &patch.Audience)
+			setStr("goal", goal, &patch.Goal)
+			setStr("focus-topics", focusTopics, &patch.FocusTopics)
+			setStr("avoid-topics", avoidTopics, &patch.AvoidTopics)
 			setStr("brand-voice", brandVoiceID, &patch.BrandVoiceID)
 			setStr("target-kind", targetKind, &patch.TargetKind)
 			setStr("target-account", targetAccountID, &patch.TargetAccountID)
@@ -171,6 +192,9 @@ func newBlogSettingsSetCmd(state *State) *cobra.Command {
 	cmd.Flags().StringVar(&siteURL, "site-url", "", "the website the articles are written for")
 	cmd.Flags().StringVar(&topic, "topic", "", "what the blog is about")
 	cmd.Flags().StringVar(&audience, "audience", "", "who reads it")
+	cmd.Flags().StringVar(&goal, "goal", "", "what the blog is for: traffic, leads, sales, signups, or authority")
+	cmd.Flags().StringVar(&focusTopics, "focus-topics", "", "what the blog wants to write about")
+	cmd.Flags().StringVar(&avoidTopics, "avoid-topics", "", "what the blog never writes about")
 	cmd.Flags().StringVar(&language, "language", "", "language code the articles are written in")
 	cmd.Flags().IntVar(&locationCode, "location-code", 0, "location the keyword data is read for")
 	cmd.Flags().IntVar(&cadencePerWeek, "cadence-per-week", 0, "how many articles to write a week")

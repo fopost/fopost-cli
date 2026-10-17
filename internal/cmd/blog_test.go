@@ -10,11 +10,13 @@ import (
 func blogSettingsJSON(hasSecret bool) map[string]any {
 	return map[string]any{
 		"siteUrl": "https://yourbrand.com", "topic": "Running", "audience": nil,
+		"goal": "signups", "focusTopics": "Trail gear", "avoidTopics": nil,
 		"language": "en", "locationCode": 2840, "cadencePerWeek": 2, "reviewHoldDays": 3,
 		"imageTier": "standard", "inBodyImages": 2,
 		"minWords": 1200, "maxWords": 1800, "brandVoiceId": nil,
 		"targetKind": "website", "targetAccountId": nil, "targetPlatform": nil,
 		"websiteUrl": "https://yourbrand.com/hooks/fopost", "hasWebsiteSecret": hasSecret,
+		"planRun":              map[string]any{"status": "done", "error": nil, "added": 14, "finishedAt": "2026-10-17T08:00:00.000Z"},
 		"keywordDataAvailable": true, "updatedAt": "2026-10-11T10:00:00.000Z",
 	}
 }
@@ -75,6 +77,49 @@ func TestBlogSettingsSetWithoutASecretPrintsNone(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "Trail running") && !strings.Contains(stdout, "Running") {
 		t.Fatalf("set did not print the settings:\n%s", stdout)
+	}
+}
+
+func TestBlogSettingsSetSendsTheGoalFields(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": blogSettingsJSON(false), "websiteSecret": nil})
+	})
+	configured(t, api.URL)
+
+	stdout, stderr, code := run(t, "", "blog", "settings", "set",
+		"--goal", "signups", "--focus-topics", "Trail gear", "--avoid-topics", "")
+	if code != ExitOK {
+		t.Fatalf("exit = %d\n%s%s", code, stdout, stderr)
+	}
+	sent := api.find(t, "PATCH", "/blog/settings")
+	if sent.Body["goal"] != "signups" || sent.Body["focusTopics"] != "Trail gear" {
+		t.Fatalf("body = %v", sent.Body)
+	}
+	// An explicit empty --avoid-topics clears the field rather than being dropped
+	if avoid, ok := sent.Body["avoidTopics"]; !ok || avoid != "" {
+		t.Fatalf("avoidTopics = %v (present %v), want an empty string", avoid, ok)
+	}
+	if _, ok := sent.Body["autoPublish"]; ok {
+		t.Fatalf("set sent the removed autoPublish: %v", sent.Body)
+	}
+	if !strings.Contains(stdout, "signups") || !strings.Contains(stdout, "done, 14 added") {
+		t.Fatalf("set did not print the goal and plan run:\n%s", stdout)
+	}
+}
+
+func TestBlogSettingsSetRejectsTheRemovedAutoPublishFlag(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": blogSettingsJSON(false)})
+	})
+	configured(t, api.URL)
+
+	if _, _, code := run(t, "", "blog", "settings", "set", "--auto-publish"); code == ExitOK {
+		t.Fatalf("--auto-publish exit = %d, want a failure", code)
+	}
+	if len(api.paths()) != 0 {
+		t.Fatalf("a removed flag reached the API: %v", api.paths())
 	}
 }
 
