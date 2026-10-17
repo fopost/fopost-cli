@@ -215,6 +215,7 @@ fopost accounts      list · get · rename · move · health · metrics · valid
                      telegram connect-code · connect-status
                      telegram commands get · set · clear
                      slack channels · members · identity · set-identity
+                     reddit subreddits · rules · flairs · set-default
                      whatsapp profile · groups · block · sandbox
                      whatsapp templates list · create · delete
                      whatsapp flows list · publish · responses
