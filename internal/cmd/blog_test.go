@@ -11,7 +11,7 @@ func blogSettingsJSON(hasSecret bool) map[string]any {
 	return map[string]any{
 		"siteUrl": "https://yourbrand.com", "topic": "Running", "audience": nil,
 		"language": "en", "locationCode": 2840, "cadencePerWeek": 2, "reviewHoldDays": 3,
-		"autoPublish": false, "imageTier": "standard", "inBodyImages": 2,
+		"imageTier": "standard", "inBodyImages": 2,
 		"minWords": 1200, "maxWords": 1800, "brandVoiceId": nil,
 		"targetKind": "website", "targetAccountId": nil, "targetPlatform": nil,
 		"websiteUrl": "https://yourbrand.com/hooks/fopost", "hasWebsiteSecret": hasSecret,
@@ -33,7 +33,7 @@ func TestBlogSettingsSetSendsOnlyTheFlagsGivenAndPrintsTheSecretOnce(t *testing.
 	configured(t, api.URL)
 
 	stdout, stderr, code := run(t, "", "blog", "settings", "set",
-		"--website-url", "https://yourbrand.com/hooks/fopost", "--auto-publish=false")
+		"--website-url", "https://yourbrand.com/hooks/fopost", "--review-hold-days", "0")
 	if code != ExitOK {
 		t.Fatalf("exit = %d\n%s%s", code, stdout, stderr)
 	}
@@ -44,9 +44,9 @@ func TestBlogSettingsSetSendsOnlyTheFlagsGivenAndPrintsTheSecretOnce(t *testing.
 	if sent.Body["websiteUrl"] != "https://yourbrand.com/hooks/fopost" {
 		t.Fatalf("websiteUrl = %v", sent.Body["websiteUrl"])
 	}
-	// An explicit false still travels; an untouched field does not
-	if sent.Body["autoPublish"] != false {
-		t.Fatalf("autoPublish = %v, want false", sent.Body["autoPublish"])
+	// An explicit zero still travels; an untouched field does not
+	if sent.Body["reviewHoldDays"] != float64(0) {
+		t.Fatalf("reviewHoldDays = %v, want 0", sent.Body["reviewHoldDays"])
 	}
 	if _, ok := sent.Body["cadencePerWeek"]; ok {
 		t.Fatalf("set sent a flag that was not given: %v", sent.Body)
