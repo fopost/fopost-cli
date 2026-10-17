@@ -41,6 +41,7 @@ func newAccountsCmd(state *State) *cobra.Command {
 		newAccountsTikTokCmd(state),
 		newAccountsInstagramCmd(state),
 		newAccountsLinkedInCmd(state),
+		newAccountsWhatsappCmd(state),
 	)
 	return cmd
 }
