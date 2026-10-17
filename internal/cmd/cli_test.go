@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,6 +47,7 @@ type fakeAPI struct {
 type recordedRequest struct {
 	Method string
 	Path   string
+	Query  url.Values
 	Body   map[string]any
 }
 
@@ -55,13 +57,17 @@ func newFakeAPI(t *testing.T, handler func(w http.ResponseWriter, r *http.Reques
 	api.mu <- struct{}{}
 	api.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
+		// Hand the handler a fresh body so it can parse a multipart form itself.
+		r.Body = io.NopCloser(bytes.NewReader(raw))
 		body := map[string]any{}
 		if len(raw) > 0 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
 			_ = json.Unmarshal(raw, &body)
 		}
 		<-api.mu
 		api.Keys = append(api.Keys, r.Header.Get("X-API-Key"))
-		api.Requests = append(api.Requests, recordedRequest{Method: r.Method, Path: r.URL.Path, Body: body})
+		api.Requests = append(api.Requests, recordedRequest{
+			Method: r.Method, Path: r.URL.Path, Query: r.URL.Query(), Body: body,
+		})
 		api.mu <- struct{}{}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -864,6 +870,461 @@ func TestAccountsSlackSetIdentitySendsOnlyPassedFields(t *testing.T) {
 	}
 	if _, ok := sent.Body["icon_url"]; ok {
 		t.Fatalf("icon_url was sent: %v", sent.Body)
+	}
+}
+
+func TestAccountsDiscordChannelsPrintsTheCurrentOne(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{
+			{"id": "c2", "name": "launches", "type": 0, "parent_id": nil, "nsfw": false, "is_current": true},
+		}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "accounts", "discord", "channels", "acc_1", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	api.find(t, http.MethodGet, "/accounts/acc_1/discord/channels")
+	if !strings.Contains(stdout, `"is_current": true`) {
+		t.Fatalf("stdout = %q", stdout)
+	}
+}
+
+func TestAccountsDiscordSetIdentitySendsOnlyPassedFields(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"username": "Release Bot", "avatar_url": nil}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, code := run(t, "", "accounts", "discord", "set-identity", "acc_1", "--username", "Bot", "--clear-username"); code != ExitUsage {
+		t.Fatalf("exit = %d, want %d", code, ExitUsage)
+	}
+	if len(api.paths()) != 0 {
+		t.Fatalf("the CLI called %v despite a usage error", api.paths())
+	}
+
+	_, stderr, code := run(t, "", "accounts", "discord", "set-identity", "acc_1", "--username", "Release Bot", "--quiet")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodPatch, "/accounts/acc_1/discord/identity")
+	if sent.Body["username"] != "Release Bot" {
+		t.Fatalf("username = %v", sent.Body["username"])
+	}
+	// An unset flag never reaches the wire, so Discord keeps it.
+	if _, ok := sent.Body["avatar_url"]; ok {
+		t.Fatalf("avatar_url was sent: %v", sent.Body)
+	}
+}
+
+func TestAccountsDiscordCreateEventNeedsAChannelOrALocation(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+			"id": "e1", "name": "Launch stream", "start_time": "2026-10-01T18:00:00.000Z", "status": "scheduled",
+		}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	args := []string{"accounts", "discord", "create-event", "acc_1", "--name", "Launch stream", "--start-time", "2026-10-01T18:00:00Z"}
+	if _, _, code := run(t, "", args...); code != ExitUsage {
+		t.Fatalf("exit = %d, want %d", code, ExitUsage)
+	}
+	if len(api.paths()) != 0 {
+		t.Fatalf("the CLI called %v despite a usage error", api.paths())
+	}
+
+	full := append(args, "--end-time", "2026-10-01T19:00:00Z", "--location", "https://example.com/live")
+	if _, stderr, code := run(t, "", full...); code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodPost, "/accounts/acc_1/discord/events")
+	if sent.Body["location"] != "https://example.com/live" {
+		t.Fatalf("location = %v", sent.Body["location"])
+	}
+}
+
+func TestAccountsDiscordAssignRoleSendsAPut(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"assigned": true}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, stderr, code := run(t, "", "accounts", "discord", "assign-role", "acc_1", "r1", "u7", "--quiet"); code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	api.find(t, http.MethodPut, "/accounts/acc_1/discord/roles/r1/members/u7")
+}
+
+func TestAccountsPinterestCreateBoardSendsOnlyWhatWasGiven(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"id": "b1", "name": "Recipes"}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, stderr, code := run(t, "", "accounts", "pinterest", "create-board", "acc_1", "Recipes", "--quiet")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodPost, "/accounts/acc_1/pinterest/boards")
+	if sent.Body["name"] != "Recipes" {
+		t.Fatalf("body = %v", sent.Body)
+	}
+	if _, ok := sent.Body["privacy"]; ok {
+		t.Fatalf("privacy should be absent: %v", sent.Body)
+	}
+}
+
+func TestAccountsTikTokMusicPassesTheQueryThrough(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"id": "m1", "title": "Sunrise", "author": "Kite"}}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "accounts", "tiktok", "music", "acc_1", "sunrise", "--limit", "5", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodGet, "/accounts/acc_1/tiktok/music")
+	if sent.Query.Get("q") != "sunrise" || sent.Query.Get("limit") != "5" {
+		t.Fatalf("query = %v", sent.Query)
+	}
+	if !strings.Contains(stdout, `"id": "m1"`) {
+		t.Fatalf("stdout = %q", stdout)
+	}
+}
+
+func TestAccountsYouTubeSetDefaultPlaylistRefusesAMissingID(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"playlist_id": nil}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, code := run(t, "", "accounts", "youtube", "set-default-playlist", "acc_1"); code == ExitOK {
+		t.Fatal("a missing playlist id should not clear the default")
+	}
+
+	if _, stderr, code := run(t, "", "accounts", "youtube", "set-default-playlist", "acc_1", "--clear", "--quiet"); code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodPut, "/accounts/acc_1/youtube/playlists/default")
+	if sent.Body["playlist_id"] != nil {
+		t.Fatalf("body = %v", sent.Body)
+	}
+}
+
+func TestAccountsMetricsAsksForRawAndPrintsBothBlocks(t *testing.T) {
+	isolate(t)
+	var path, query string
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		path, query = r.URL.Path, r.URL.RawQuery
+		io.WriteString(w, `{"data":{"platform":"facebook","account":{"fetched_at":"2026-09-20T02:00:00.000Z","metrics":[{"key":"page_daily_video_ad_break_earnings","label":"Ad Break Earnings","kind":"currency_usd","value":42.15},{"key":"daily_views","label":"Views by Day","kind":"series","value":[{"day":"2026-09-19"},{"day":"2026-09-20"}]}]},"post":{"external_post_id":"123_456","fetched_at":"2026-09-20T02:00:00.000Z","metrics":[{"key":"post_impressions_paid","label":"Paid Impressions","kind":"count","value":1500}]}}}`)
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "accounts", "metrics", "acc_1")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	if path != "/accounts/acc_1/insights" || query != "raw=true" {
+		t.Fatalf("request = %s?%s", path, query)
+	}
+	for _, want := range []string{
+		"facebook",
+		"page_daily_video_ad_break_earnings",
+		"42.15",
+		// A series is summarised rather than printed inline.
+		"2 points",
+		"Latest Post 123_456",
+		"post_impressions_paid",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("stdout missing %q:\n%s", want, stdout)
+		}
+	}
+}
+
+func TestAccountsMetricsSurfacesAPendingGrant(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		io.WriteString(w, `{"error":"platform_metrics_unavailable","message":"google-business metrics are not available on this deployment yet."}`)
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, stderr, code := run(t, "", "accounts", "metrics", "acc_1")
+	if code == ExitOK {
+		t.Fatal("a pending grant must not exit 0")
+	}
+	if !strings.Contains(stderr, "platform_metrics_unavailable") &&
+		!strings.Contains(stderr, "not available") {
+		t.Fatalf("stderr = %q", stderr)
+	}
+}
+
+func TestAdsSparkPostsSendsTheIdentityAndPrintsTheViews(t *testing.T) {
+	isolate(t)
+	var query string
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		json.NewEncoder(w).Encode(map[string]any{"data": []any{
+			map[string]any{"id": "item_99", "identityId": "idt_1", "caption": "Behind the scenes", "views": 48213},
+		}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL, Workspace: "ws_1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, code := run(t, "", "ads", "spark-posts", "--connection", "conn_1"); code != ExitUsage {
+		t.Fatalf("exit = %d without --ad-account, want %d", code, ExitUsage)
+	}
+
+	stdout, stderr, code := run(t, "", "ads", "spark-posts",
+		"--connection", "conn_1", "--ad-account", "7011", "--identity", "idt_1")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	api.find(t, http.MethodGet, "/ads/spark-posts")
+	if !strings.Contains(query, "identity_id=idt_1") || !strings.Contains(query, "ad_account_id=7011") {
+		t.Fatalf("query = %q", query)
+	}
+	for _, want := range []string{"item_99", "48213"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("spark-posts output is missing %q:\n%s", want, stdout)
+		}
+	}
+}
+
+func TestAdsCommentsReadsAPageAndTheWritesCarryTheAd(t *testing.T) {
+	isolate(t)
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/reply"):
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"replyId": "cm_2"}})
+		case r.Method == http.MethodGet:
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+				"comments": []any{map[string]any{
+					"id": "cm_1", "text": "where can I get this?", "authorName": "someone", "hidden": true,
+				}},
+				"nextCursor": "2",
+			}})
+		default:
+			json.NewEncoder(w).Encode(map[string]any{"message": "ok"})
+		}
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL, Workspace: "ws_1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "ads", "comments", "--connection", "conn_1", "--ad", "ad_1")
+	if code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	api.find(t, http.MethodGet, "/ads/comments")
+	for _, want := range []string{"cm_1", "hidden", "Next cursor: 2"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("comments output is missing %q:\n%s", want, stdout)
+		}
+	}
+
+	if _, stderr, code = run(t, "", "ads", "reply", "cm_1",
+		"--connection", "conn_1", "--ad", "ad_1", "--text", "Friday!"); code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	sent := api.find(t, http.MethodPost, "/ads/comments/cm_1/reply")
+	if sent.Body["adId"] != "ad_1" || sent.Body["text"] != "Friday!" {
+		t.Fatalf("body = %v", sent.Body)
+	}
+
+	if _, stderr, code = run(t, "", "ads", "hide", "cm_1",
+		"--connection", "conn_1", "--ad", "ad_1"); code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	if hide := api.find(t, http.MethodPost, "/ads/comments/cm_1/hide"); hide.Body["hidden"] != true {
+		t.Fatalf("body = %v", hide.Body)
+	}
+
+	if _, stderr, code = run(t, "", "ads", "delete-comment", "cm_1",
+		"--connection", "conn_1", "--ad", "ad_1"); code != ExitOK {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	// The ad travels in the body, because the path already carries the comment.
+	if del := api.find(t, http.MethodDelete, "/ads/comments/cm_1"); del.Body["adId"] != "ad_1" {
+		t.Fatalf("body = %v", del.Body)
+	}
+}
+
+func TestMediaLimitsPassesTheWorkspaceAndEmitsJSON(t *testing.T) {
+	isolate(t)
+
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/media/limits" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+			"maxFileBytes": 419430400, "source": "accounts", "connectedAccounts": 4,
+			"largeUploadsEnabled": false, "nextTier": map[string]any{"upToAccounts": 15, "maxFileBytes": 2147483648},
+			"multipartMaxFileBytes": 104857600, "maxFilesPerUpload": 5, "directUploadAvailable": true,
+			"allowedTypes": []string{"image/png"},
+		}})
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "media", "limits", "--workspace", "ws_7", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	if got := api.find(t, http.MethodGet, "/media/limits").Query.Get("workspaceId"); got != "ws_7" {
+		t.Fatalf("workspaceId = %q, want the flag's workspace", got)
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("--json output is not valid JSON: %v\n%s", err, stdout)
+	}
+	if result["maxFileBytes"] != float64(419430400) || result["multipartMaxFileBytes"] != float64(104857600) {
+		t.Fatalf("result = %v", result)
+	}
+
+	stdout, _, code = run(t, "", "media", "limits")
+	if code != ExitOK || !strings.Contains(stdout, "400.0 MB") || !strings.Contains(stdout, "2.0 GB up to 15 accounts") {
+		t.Fatalf("table output = %q (exit %d)", stdout, code)
+	}
+}
+
+func TestMediaUploadSendsFilesOverTheCeilingDirect(t *testing.T) {
+	isolate(t)
+
+	dir := t.TempDir()
+	small := filepath.Join(dir, "small.png")
+	big := filepath.Join(dir, "big.mp4")
+	if err := os.WriteFile(small, []byte("tiny"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(big, []byte("twelve bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var api *fakeAPI
+	var putLength int64
+	api = newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/media/limits":
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"maxFileBytes": 5368709120, "multipartMaxFileBytes": 8}})
+		case r.Method == http.MethodPost && r.URL.Path == "/media/upload":
+			json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"id": "med_small", "type": "image", "name": "small.png", "size": 4}}})
+		case r.Method == http.MethodPost && r.URL.Path == "/media/presign":
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+				"uploadId": "up_1", "uploadUrl": api.URL + "/blob/up_1", "method": "PUT", "headers": map[string]string{}, "maxFileBytes": 5368709120,
+			}})
+		case r.Method == http.MethodPut && r.URL.Path == "/blob/up_1":
+			putLength = r.ContentLength
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodPost && r.URL.Path == "/media/presign/up_1/complete":
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"id": "med_big", "type": "video", "name": "big.mp4", "size": 12}})
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"error":"not_found","message":"no"}`))
+		}
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL, Workspace: "ws_1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "media", "upload", small, big, "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	want := []string{"GET /media/limits", "POST /media/upload", "POST /media/presign", "PUT /blob/up_1", "POST /media/presign/up_1/complete"}
+	if got := api.paths(); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("requests = %v, want %v", got, want)
+	}
+	if presign := api.find(t, http.MethodPost, "/media/presign"); presign.Body["filename"] != "big.mp4" || presign.Body["size"] != float64(12) {
+		t.Fatalf("presign body = %v, want only the large file", presign.Body)
+	}
+	if putLength != 12 {
+		t.Fatalf("PUT length = %d, want the file's 12 bytes", putLength)
+	}
+	var result []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil || len(result) != 2 || result[0]["id"] != "med_small" || result[1]["id"] != "med_big" {
+		t.Fatalf("result = %v (%v)", result, err)
+	}
+}
+
+func TestPostsCreateWithFileSendsItWithThePost(t *testing.T) {
+	isolate(t)
+
+	mediaFile := filepath.Join(t.TempDir(), "card.png")
+	if err := os.WriteFile(mediaFile, []byte("\x89PNG\r\n\x1a\n fake"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var postField string
+	var partNames []string
+	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/media/limits":
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"maxFileBytes": 104857600, "multipartMaxFileBytes": 104857600}})
+		case r.Method == http.MethodPost && r.URL.Path == "/posts":
+			if err := r.ParseMultipartForm(1 << 20); err != nil {
+				t.Errorf("the post was not multipart: %v", err)
+				return
+			}
+			postField = r.FormValue("post")
+			for _, header := range r.MultipartForm.File["files"] {
+				partNames = append(partNames, header.Filename)
+			}
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"id": "post_1", "status": "draft"}})
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"error":"not_found","message":"no"}`))
+		}
+	})
+	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL, Workspace: "ws_1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "", "posts", "create", "--account", "acc_1", "--text", "Shipping today", "--file", mediaFile, "--json")
+	if code != ExitOK {
+		t.Fatalf("exit = %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	if got := api.paths(); strings.Join(got, ",") != "GET /media/limits,POST /posts" {
+		t.Fatalf("requests = %v, want no separate upload", got)
+	}
+	var body map[string]any
+	if err := json.Unmarshal([]byte(postField), &body); err != nil || body["workspace_id"] != "ws_1" {
+		t.Fatalf("post field = %q (%v)", postField, err)
+	}
+	if strings.Join(partNames, ",") != "card.png" {
+		t.Fatalf("file parts = %v", partNames)
 	}
 }
 
