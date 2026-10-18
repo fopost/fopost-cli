@@ -9,15 +9,15 @@ import (
 
 func blogSettingsJSON(hasSecret bool) map[string]any {
 	return map[string]any{
-		"siteUrl": "https://yourbrand.com", "topic": "Running", "audience": nil,
-		"goal": "signups", "focusTopics": "Trail gear", "avoidTopics": nil,
-		"language": "en", "locationCode": 2840, "cadencePerWeek": 2, "reviewHoldDays": 3,
-		"imageTier": "standard", "inBodyImages": 2,
-		"minWords": 1200, "maxWords": 1800, "brandVoiceId": nil,
-		"targetKind": "website", "targetAccountId": nil, "targetPlatform": nil,
-		"websiteUrl": "https://yourbrand.com/hooks/fopost", "hasWebsiteSecret": hasSecret,
-		"planRun":              map[string]any{"status": "done", "error": nil, "added": 14, "finishedAt": "2026-10-17T08:00:00.000Z"},
-		"keywordDataAvailable": true, "updatedAt": "2026-10-11T10:00:00.000Z",
+		"site_url": "https://yourbrand.com", "topic": "Running", "audience": nil,
+		"goal": "signups", "focus_topics": "Trail gear", "avoid_topics": nil,
+		"language": "en", "location_code": 2840, "cadence_per_week": 2, "review_hold_days": 3,
+		"image_tier": "standard", "in_body_images": 2,
+		"min_words": 1200, "max_words": 1800, "brand_voice_id": nil,
+		"target_kind": "website", "target_account_id": nil, "target_platform": nil,
+		"website_url": "https://yourbrand.com/hooks/fopost", "has_website_secret": hasSecret,
+		"plan_run":               map[string]any{"status": "done", "error": nil, "added": 14, "finished_at": "2026-10-17T08:00:00.000Z"},
+		"keyword_data_available": true, "updated_at": "2026-10-11T10:00:00.000Z",
 	}
 }
 
@@ -28,9 +28,9 @@ func TestBlogSettingsSetSendsOnlyTheFlagsGivenAndPrintsTheSecretOnce(t *testing.
 		if r.Method != http.MethodPatch {
 			t.Errorf("method = %s", r.Method)
 		}
-		json.NewEncoder(w).Encode(map[string]any{
-			"data": blogSettingsJSON(true), "websiteSecret": secret,
-		})
+		settings := blogSettingsJSON(true)
+		settings["website_secret"] = secret
+		json.NewEncoder(w).Encode(settings)
 	})
 	configured(t, api.URL)
 
@@ -64,7 +64,7 @@ func TestBlogSettingsSetSendsOnlyTheFlagsGivenAndPrintsTheSecretOnce(t *testing.
 func TestBlogSettingsSetWithoutASecretPrintsNone(t *testing.T) {
 	isolate(t)
 	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"data": blogSettingsJSON(true), "websiteSecret": nil})
+		json.NewEncoder(w).Encode(blogSettingsJSON(true))
 	})
 	configured(t, api.URL)
 
@@ -83,7 +83,7 @@ func TestBlogSettingsSetWithoutASecretPrintsNone(t *testing.T) {
 func TestBlogSettingsSetSendsTheGoalFields(t *testing.T) {
 	isolate(t)
 	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"data": blogSettingsJSON(false), "websiteSecret": nil})
+		json.NewEncoder(w).Encode(blogSettingsJSON(false))
 	})
 	configured(t, api.URL)
 
@@ -111,7 +111,7 @@ func TestBlogSettingsSetSendsTheGoalFields(t *testing.T) {
 func TestBlogSettingsSetRejectsTheRemovedAutoPublishFlag(t *testing.T) {
 	isolate(t)
 	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"data": blogSettingsJSON(false)})
+		json.NewEncoder(w).Encode(blogSettingsJSON(false))
 	})
 	configured(t, api.URL)
 
@@ -126,7 +126,7 @@ func TestBlogSettingsSetRejectsTheRemovedAutoPublishFlag(t *testing.T) {
 func TestBlogSettingsRotateSecretPrintsItWithTheNote(t *testing.T) {
 	isolate(t)
 	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"websiteSecret": "whsec_new"}})
+		json.NewEncoder(w).Encode(map[string]any{"website_secret": "whsec_new"})
 	})
 	configured(t, api.URL)
 
@@ -147,7 +147,7 @@ func TestBlogKeywordsPlanSendsTheSeeds(t *testing.T) {
 	isolate(t)
 	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"status": "queued"}})
+		json.NewEncoder(w).Encode(map[string]any{"status": "queued"})
 	})
 	configured(t, api.URL)
 
@@ -169,10 +169,10 @@ func TestBlogKeywordsListFiltersByStatus(t *testing.T) {
 	isolate(t)
 	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{
-			"id": "kw_1", "keyword": "best trail shoes", "searchVolume": 4400, "difficulty": 38,
+			"id": "kw_1", "keyword": "best trail shoes", "search_volume": 4400, "difficulty": 38,
 			"cpc": 1.25, "intent": "commercial", "source": "planner", "status": "planned",
-			"plannedFor": "2026-10-20", "fitReason": "Buyers compare before signing up",
-			"createdAt": "2026-10-11T10:00:00.000Z",
+			"planned_for": "2026-10-20", "fit_reason": "Buyers compare before signing up",
+			"created_at": "2026-10-11T10:00:00.000Z",
 		}}})
 	})
 	configured(t, api.URL)
@@ -182,7 +182,7 @@ func TestBlogKeywordsListFiltersByStatus(t *testing.T) {
 		t.Fatalf("exit = %d\n%s%s", code, stdout, stderr)
 	}
 	sent := api.find(t, "GET", "/blog/keywords")
-	if sent.Query.Get("workspaceId") != "ws_1" || sent.Query.Get("status") != "planned,suggested" {
+	if sent.Query.Get("workspace_id") != "ws_1" || sent.Query.Get("status") != "planned,suggested" {
 		t.Fatalf("query = %v", sent.Query)
 	}
 	if !strings.Contains(stdout, "best trail shoes") || !strings.Contains(stdout, "4400") {
@@ -240,13 +240,13 @@ func TestBlogKeywordsSuggestMapsAnEmptyBalanceToItsExitCode(t *testing.T) {
 func articleJSON(status string) map[string]any {
 	return map[string]any{
 		"id": "art_1", "title": "Best Trail Shoes", "slug": "best-trail-shoes",
-		"keyword": "best trail shoes", "excerpt": nil, "metaTitle": nil, "metaDescription": nil,
-		"featuredImage": nil, "tags": []string{"shoes"}, "wordCount": 1400, "status": status,
-		"origin": "planner", "reviewUntil": nil, "publishAt": nil, "publishedAt": nil,
-		"publishedUrl": nil, "error": nil,
-		"createdAt": "2026-10-11T10:00:00.000Z", "updatedAt": "2026-10-11T10:00:00.000Z",
+		"keyword": "best trail shoes", "excerpt": nil, "meta_title": nil, "meta_description": nil,
+		"featured_image": nil, "tags": []string{"shoes"}, "word_count": 1400, "status": status,
+		"origin": "planner", "review_until": nil, "publish_at": nil, "published_at": nil,
+		"published_url": nil, "error": nil,
+		"created_at": "2026-10-11T10:00:00.000Z", "updated_at": "2026-10-11T10:00:00.000Z",
 		"instructions": nil, "outline": []string{"Intro"}, "brief": map[string]any{},
-		"bodyMarkdown": "# Best Trail Shoes\n\nThe body.", "bodyHtml": "<h1>Best Trail Shoes</h1>",
+		"body_markdown": "# Best Trail Shoes\n\nThe body.", "body_html": "<h1>Best Trail Shoes</h1>",
 		"images": []any{},
 	}
 }
@@ -254,7 +254,7 @@ func articleJSON(status string) map[string]any {
 func TestBlogArticlesGetPrintsMetadataUnlessBodyIsAsked(t *testing.T) {
 	isolate(t)
 	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"data": articleJSON("draft")})
+		json.NewEncoder(w).Encode(articleJSON("draft"))
 	})
 	configured(t, api.URL)
 
@@ -263,7 +263,7 @@ func TestBlogArticlesGetPrintsMetadataUnlessBodyIsAsked(t *testing.T) {
 		t.Fatalf("exit = %d\n%s%s", code, stdout, stderr)
 	}
 	sent := api.find(t, "GET", "/blog/articles/art_1")
-	if sent.Query.Get("workspaceId") != "ws_1" {
+	if sent.Query.Get("workspace_id") != "ws_1" {
 		t.Fatalf("query = %v", sent.Query)
 	}
 	if !strings.Contains(stdout, "best-trail-shoes") || strings.Contains(stdout, "The body.") {
@@ -280,7 +280,7 @@ func TestBlogArticlesPublishPromptsUnlessYes(t *testing.T) {
 	isolate(t)
 	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(map[string]any{"data": articleJSON("publishing")})
+		json.NewEncoder(w).Encode(articleJSON("publishing"))
 	})
 	configured(t, api.URL)
 
@@ -301,7 +301,7 @@ func TestBlogArticlesPublishPromptsUnlessYes(t *testing.T) {
 		t.Fatalf("exit = %d\n%s%s", code, stdout, stderr)
 	}
 	sent := api.find(t, "POST", "/blog/articles/art_1/publish")
-	if sent.Query.Get("workspaceId") != "ws_1" {
+	if sent.Query.Get("workspace_id") != "ws_1" {
 		t.Fatalf("query = %v", sent.Query)
 	}
 	if !strings.Contains(stdout, "Publishing article art_1") {
@@ -326,7 +326,7 @@ func TestBlogArticlesSubmitSendsItForApproval(t *testing.T) {
 		t.Fatalf("exit = %d\n%s%s", code, stdout, stderr)
 	}
 	sent := api.find(t, "POST", "/blog/articles/art_1/submit")
-	if sent.Query.Get("workspaceId") != "ws_1" {
+	if sent.Query.Get("workspace_id") != "ws_1" {
 		t.Fatalf("query = %v", sent.Query)
 	}
 	if !strings.Contains(stdout, `"in_review"`) {
@@ -342,7 +342,7 @@ func TestBlogArticlesSubmitSendsItForApproval(t *testing.T) {
 func TestBlogArticlesEditReadsTheBodyFromStdin(t *testing.T) {
 	isolate(t)
 	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"data": articleJSON("draft")})
+		json.NewEncoder(w).Encode(articleJSON("draft"))
 	})
 	configured(t, api.URL)
 
@@ -369,7 +369,7 @@ func TestBlogArticlesRequestNeedsASubject(t *testing.T) {
 	isolate(t)
 	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(map[string]any{"data": articleJSON("queued")})
+		json.NewEncoder(w).Encode(articleJSON("queued"))
 	})
 	configured(t, api.URL)
 
@@ -406,8 +406,8 @@ func TestBlogDeleteCommandsPassTheWorkspaceInTheQuery(t *testing.T) {
 		}
 	}
 	for _, path := range []string{"/blog/keywords/kw_1", "/blog/articles/art_1"} {
-		if api.find(t, "DELETE", path).Query.Get("workspaceId") != "ws_1" {
-			t.Fatalf("DELETE %s carried no workspaceId", path)
+		if api.find(t, "DELETE", path).Query.Get("workspace_id") != "ws_1" {
+			t.Fatalf("DELETE %s carried no workspace_id", path)
 		}
 	}
 }

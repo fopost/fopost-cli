@@ -269,14 +269,8 @@ func newBlogSettingsTestWebsiteCmd(state *State) *cobra.Command {
 			}
 			printer := state.Printer()
 			return printer.Value(result, func() {
-				status := "-"
-				if result.Status != nil {
-					status = strconv.Itoa(*result.Status)
-				}
 				printer.Fields([][2]string{
-					{"ok", strconv.FormatBool(result.OK)},
-					{"status", status},
-					{"error", strOrDash(result.Error)},
+					{"status", strconv.Itoa(result.HTTPStatus)},
 				})
 			})
 		},
