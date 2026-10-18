@@ -26,6 +26,7 @@ func newPostsCmd(state *State) *cobra.Command {
 		newPostsCreateCmd(state),
 		newPostsPublishCmd(state),
 		newPostsCancelCmd(state),
+		newPostsUnpublishCmd(state),
 		newPostsDeleteCmd(state),
 		newPostsDuplicateCmd(state),
 		newPostsPreflightCmd(state),
@@ -462,6 +463,43 @@ func newPostsCancelCmd(state *State) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringArrayVar(&accounts, "account", nil, "cancel only these account ids (repeatable)")
+	return cmd
+}
+
+func newPostsUnpublishCmd(state *State) *cobra.Command {
+	var yes bool
+	cmd := &cobra.Command{
+		Use:   "unpublish <post-id>",
+		Short: "Take a live post down on every network",
+		Long: "Deletes the post on every network it is live on; the post stays as a record.\n" +
+			"A network that cannot delete a live post refuses the whole call.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !yes {
+				if err := confirm(state, fmt.Sprintf("Unpublish post %s on every network? This cannot be undone.", args[0])); err != nil {
+					return err
+				}
+			}
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			result, err := client.Posts.Unpublish(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			printer := state.Printer()
+			return printer.Value(result, func() {
+				printer.Success("Unpublished %s on %d network(s). Post is %s.", args[0], len(result.Deliveries), output.Dash(result.PostStatus))
+				rows := make([][]string, 0, len(result.Deliveries))
+				for _, delivery := range result.Deliveries {
+					rows = append(rows, []string{delivery.AccountID, delivery.Platform, boolLabel(delivery.Removed, "removed", "kept")})
+				}
+				printer.Table([]string{"account id", "platform", "result"}, rows)
+			})
+		},
+	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")
 	return cmd
 }
 
