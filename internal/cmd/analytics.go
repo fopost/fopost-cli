@@ -26,6 +26,7 @@ func newAnalyticsCmd(state *State) *cobra.Command {
 		newAnalyticsChangesCmd(state),
 		newAnalyticsCollectPostCmd(state),
 		newAnalyticsNativePostsCmd(state),
+		newAnalyticsInboxCmd(state),
 	)
 	return cmd
 }
