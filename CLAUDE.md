@@ -5,7 +5,7 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 ## What This Is
 
 `github.com/fopost/fopost-cli` — the official FoPost command-line interface. It
-builds a single static binary named `fopost` (version 0.2.0) that wraps the
+builds a single static binary named `fopost` (version 0.3.0) that wraps the
 official Go SDK, `github.com/fopost/fopost-go`. It is distributed through a
 Homebrew tap, GitHub Releases, and `go install`; it is not a library and exports
 no public API.
@@ -101,11 +101,11 @@ resolves it normally with no shim. It is currently pinned to a pseudo-version
 because the SDK has no `v*` tag yet; once it is tagged, bump `go.mod` to the
 released version.
 
-The pin currently points at a commit on the SDK's `feature/broadcasts-sequences`
-branch, which is stacked on `feature/contacts` and is what `fopost contacts`,
-`fopost broadcasts` and `fopost sequences` need. Re-point it at `main` — or at
-the tag — once those branches merge, or a `go get -u` will silently walk it
-backwards.
+The pin currently points at the head of the SDK's `feature/sdk-gaps` branch
+(fopost/fopost-go#38), which is what `fopost queue`, `posts unpublish`,
+`connect-sessions`, `webhooks deliveries`, `automations versions` and
+`analytics inbox` need. Re-point it at the `v0.4.0` tag once that PR merges and
+is tagged, or a `go get -u` will silently walk it backwards.
 
 `go.mod` declares `go 1.22`, which is why `golang.org/x/term` is pinned to
 `v0.27.0` — from `v0.34.0` it requires a newer toolchain. CI builds on 1.22 and
@@ -121,7 +121,7 @@ go vet ./...
 gofmt -l .                     # must print nothing
 go run . --help                # try the CLI without installing it
 
-go build -ldflags "-X github.com/fopost/fopost-cli/internal/buildinfo.Version=0.2.0" -o fopost .
+go build -ldflags "-X github.com/fopost/fopost-cli/internal/buildinfo.Version=0.3.0" -o fopost .
 ```
 
 Tests never reach the network. They run the real cobra tree in-process through

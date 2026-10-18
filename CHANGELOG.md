@@ -9,6 +9,18 @@ All notable changes to the CLI are documented here. Releases are `v<version>` ta
 - `fopost ads tracking pixels list · get · create · stats · match-quality`, `custom-conversions list · create · delete` and `conversions list · send`. `conversions send` reads a JSON array of events from a file or stdin and sends it exactly once per `--idempotency-key`; `custom-conversions delete` confirms unless `--yes` is passed.
 - Requires `fopost-go` with `Ads.SendConversions` and the pixel and custom conversion methods (the pin in `go.mod` must be bumped once that SDK version is released).
 
+## 0.3.0 - 2026-10-18
+
+### Added
+
+- `fopost queue slots list · create · update · delete`, `queue next` and `queue preview` manage the posting queue, and `posts create --schedule queue` drops a post into the next free slot.
+- `fopost posts unpublish` takes a live post down on every network; it confirms unless `--yes` is passed.
+- `fopost connect-sessions create · get` mints a hosted connect link for one of your users and reads its status.
+- `fopost webhooks deliveries list · get · redeliver` reads and replays a subscription's delivery log.
+- `fopost automations versions list · get · restore` walks an automation's saved graphs and restores one as a new version.
+- `fopost analytics inbox` prints the inbox roll-up.
+- Requires `fopost-go` 0.4.0 (`Queue`, `ConnectSessions`, `Posts.Unpublish`, webhook deliveries, automation versions, `Analytics.Inbox`); the pin in `go.mod` must be re-pointed at the tag once it is released.
+
 ## 0.2.0 - 2026-10-18
 
 ### Removed

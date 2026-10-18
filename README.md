@@ -43,7 +43,7 @@ Grab the archive for your platform from the
 `checksums.txt`, and put `fopost` on your `PATH`:
 
 ```bash
-tar -xzf fopost_0.2.0_darwin_arm64.tar.gz
+tar -xzf fopost_0.3.0_darwin_arm64.tar.gz
 sudo mv fopost /usr/local/bin/
 fopost version
 ```
@@ -136,6 +136,10 @@ git log -1 --pretty=%s | \
 
 Nothing reaches a platform without `--publish`, an explicit `posts publish`, or
 a schedule you set.
+
+`--schedule queue` drops the post into the next free slot of the posting queue
+instead of a fixed time. `fopost queue slots` manages the weekly slots, and
+`fopost queue next` and `fopost queue preview` show when a queued post would go out.
 
 ## Scripting with `--json`
 
@@ -239,8 +243,9 @@ fopost accounts      list · get · rename · move · health · metrics · valid
                      linkedin mentions
                      reddit subreddits · rules · flairs · set-default
 fopost account-groups list · get · create · rename · set-members · delete
-fopost posts         list · get · create · publish · cancel · delete
+fopost posts         list · get · create · publish · cancel · unpublish · delete
                      duplicate · preflight · deliveries
+fopost queue         slots (list · create · update · delete) · next · preview
 fopost media         list · limits · upload · delete
 fopost labels        list · create · delete
 fopost contacts      list · get · conversations · import · delete
@@ -254,9 +259,12 @@ fopost blog          settings get · set · rotate-secret · test-website
 fopost blogs         list · articles (list · get · create · update · delete)
                      products (list · update)
 fopost analytics     overview · top-posts · time-series · decay · frequency · timeline ·
-                     changes · collect-post · native-posts
+                     changes · collect-post · native-posts · inbox
 fopost automations   list · get · toggle · trigger · runs
+                     versions list · get · restore
 fopost webhooks      list · create · test · delete
+                     deliveries list · get · redeliver
+fopost connect-sessions create · get
 fopost activity      list · audit
 fopost ads           networks · tree · pause · resume · insights · leads · catalogs · library ·
                      google · tracking
