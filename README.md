@@ -266,7 +266,8 @@ fopost webhooks      list · create · test · delete
                      deliveries list · get · redeliver
 fopost connect-sessions create · get
 fopost activity      list · audit
-fopost ads           networks · tree · pause · resume · insights · leads · catalogs · library
+fopost ads           networks · tree · pause · resume · insights · leads · catalogs · library ·
+                     google · tracking
 fopost completion    bash · zsh · fish · powershell
 fopost version
 ```
@@ -354,3 +355,28 @@ fopost ads google query --connection c4d5e6f7-… --customer 1234567890 \
 
 `--customer` has to name an account the connection's grant reaches; any other answers
 404. The other `fopost ads` commands work across networks and dispatch by connection.
+
+### Ads tracking
+
+`fopost ads tracking` covers pixels, the Conversions API and custom conversions. Every
+pixel command names the connection and the ad account that owns the pixel; the ads scope
+is enough:
+
+```bash
+fopost ads tracking pixels list --connection c4d5e6f7-… --ad-account act_123
+fopost ads tracking pixels create --connection c4d5e6f7-… --ad-account act_123 --name "Site"
+fopost ads tracking pixels get 123 --connection c4d5e6f7-… --ad-account act_123 --code
+fopost ads tracking pixels stats 123 --connection c4d5e6f7-… --ad-account act_123
+fopost ads tracking pixels match-quality 123 --connection c4d5e6f7-… --ad-account act_123
+fopost ads tracking custom-conversions list --connection c4d5e6f7-… --ad-account act_123
+fopost ads tracking custom-conversions create --connection c4d5e6f7-… --ad-account act_123 \
+  --pixel 123 --name "Signed up" --event-type COMPLETE_REGISTRATION --url-contains /thanks
+fopost ads tracking custom-conversions delete 456 --connection c4d5e6f7-… --ad-account act_123
+fopost ads tracking conversions list --limit 20
+fopost ads tracking conversions send --connection c4d5e6f7-… --ad-account act_123 \
+  --pixel 123 --idempotency-key order-981 --events events.json
+```
+
+`conversions send` reads a JSON array of events from `--events` (a path, or `-` for stdin)
+and sends it exactly once per `--idempotency-key`: a key sent before answers replayed and
+sends nothing. Identity fields are hashed by the API and never stored.

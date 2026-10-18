@@ -2,6 +2,13 @@
 
 All notable changes to the CLI are documented here. Releases are `v<version>` tags on `main`.
 
+## Unreleased
+
+### Added
+
+- `fopost ads tracking pixels list · get · create · stats · match-quality`, `custom-conversions list · create · delete` and `conversions list · send`. `conversions send` reads a JSON array of events from a file or stdin and sends it exactly once per `--idempotency-key`; `custom-conversions delete` confirms unless `--yes` is passed.
+- Requires `fopost-go` with `Ads.SendConversions` and the pixel and custom conversion methods (the pin in `go.mod` must be bumped once that SDK version is released).
+
 ## 0.3.0 - 2026-10-18
 
 ### Added
