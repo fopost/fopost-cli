@@ -23,8 +23,8 @@ func newBlogCmd(state *State) *cobra.Command {
 		Long: "Plan keywords, write articles and publish them to a website.\n\n" +
 			"A post goes to a social network; an article goes to a website. Planning " +
 			"keywords, requesting an article and regenerating one spend AI credits. " +
-			"Nothing publishes until `blog articles publish` is run or auto-publish is " +
-			"on in the settings.",
+			"A written article is a draft until `blog articles submit` sends it for " +
+			"approval, and nothing publishes until `blog articles publish` is run.",
 	}
 	cmd.AddCommand(
 		newBlogSettingsCmd(state),
@@ -58,16 +58,32 @@ func strOrDash(s *string) string {
 	return output.Dash(*s)
 }
 
+func planRunText(run *fopost.BlogPlanRun) string {
+	if run == nil {
+		return "-"
+	}
+	text := run.Status
+	if run.Added != nil {
+		text += fmt.Sprintf(", %d added", *run.Added)
+	}
+	if run.Error != nil {
+		text += ": " + *run.Error
+	}
+	return text
+}
+
 func settingsRows(settings *fopost.BlogSettings) [][2]string {
 	return [][2]string{
 		{"site url", strOrDash(settings.SiteURL)},
 		{"topic", strOrDash(settings.Topic)},
 		{"audience", strOrDash(settings.Audience)},
+		{"goal", strOrDash(settings.Goal)},
+		{"focus topics", strOrDash(settings.FocusTopics)},
+		{"avoid topics", strOrDash(settings.AvoidTopics)},
 		{"language", output.Dash(settings.Language)},
 		{"location code", strconv.Itoa(settings.LocationCode)},
 		{"cadence per week", strconv.Itoa(settings.CadencePerWeek)},
 		{"review hold days", strconv.Itoa(settings.ReviewHoldDays)},
-		{"auto publish", strconv.FormatBool(settings.AutoPublish)},
 		{"image tier", output.Dash(settings.ImageTier)},
 		{"in-body images", strconv.Itoa(settings.InBodyImages)},
 		{"words", fmt.Sprintf("%d-%d", settings.MinWords, settings.MaxWords)},
@@ -76,6 +92,7 @@ func settingsRows(settings *fopost.BlogSettings) [][2]string {
 		{"target account", strOrDash(settings.TargetAccountID)},
 		{"website url", strOrDash(settings.WebsiteURL)},
 		{"website secret", map[bool]string{true: "set", false: "-"}[settings.HasWebsiteSecret]},
+		{"plan run", planRunText(settings.PlanRun)},
 		{"keyword data", strconv.FormatBool(settings.KeywordDataAvailable)},
 		{"updated", settings.UpdatedAt.String()},
 	}
@@ -108,9 +125,8 @@ func newBlogSettingsGetCmd(state *State) *cobra.Command {
 }
 
 func newBlogSettingsSetCmd(state *State) *cobra.Command {
-	var siteURL, topic, audience, language, imageTier, brandVoiceID, targetKind, targetAccountID, websiteURL string
+	var siteURL, topic, audience, goal, focusTopics, avoidTopics, language, imageTier, brandVoiceID, targetKind, targetAccountID, websiteURL string
 	var locationCode, cadencePerWeek, reviewHoldDays, inBodyImages, minWords, maxWords int
-	var autoPublish bool
 	cmd := &cobra.Command{
 		Use:   "set",
 		Short: "Change blog settings; only the flags given are sent",
@@ -137,6 +153,9 @@ func newBlogSettingsSetCmd(state *State) *cobra.Command {
 			setStr("site-url", siteURL, &patch.SiteURL)
 			setStr("topic", topic, &patch.Topic)
 			setStr("audience", audience, &patch.Audience)
+			setStr("goal", goal, &patch.Goal)
+			setStr("focus-topics", focusTopics, &patch.FocusTopics)
+			setStr("avoid-topics", avoidTopics, &patch.AvoidTopics)
 			setStr("brand-voice", brandVoiceID, &patch.BrandVoiceID)
 			setStr("target-kind", targetKind, &patch.TargetKind)
 			setStr("target-account", targetAccountID, &patch.TargetAccountID)
@@ -147,9 +166,6 @@ func newBlogSettingsSetCmd(state *State) *cobra.Command {
 			setInt("in-body-images", inBodyImages, &patch.InBodyImages)
 			setInt("min-words", minWords, &patch.MinWords)
 			setInt("max-words", maxWords, &patch.MaxWords)
-			if flags.Changed("auto-publish") {
-				patch.AutoPublish = &autoPublish
-			}
 
 			client, err := state.Client()
 			if err != nil {
@@ -177,11 +193,13 @@ func newBlogSettingsSetCmd(state *State) *cobra.Command {
 	cmd.Flags().StringVar(&siteURL, "site-url", "", "the website the articles are written for")
 	cmd.Flags().StringVar(&topic, "topic", "", "what the blog is about")
 	cmd.Flags().StringVar(&audience, "audience", "", "who reads it")
+	cmd.Flags().StringVar(&goal, "goal", "", "what the blog is for: traffic, leads, sales, signups, or authority")
+	cmd.Flags().StringVar(&focusTopics, "focus-topics", "", "what the blog wants to write about")
+	cmd.Flags().StringVar(&avoidTopics, "avoid-topics", "", "what the blog never writes about")
 	cmd.Flags().StringVar(&language, "language", "", "language code the articles are written in")
 	cmd.Flags().IntVar(&locationCode, "location-code", 0, "location the keyword data is read for")
 	cmd.Flags().IntVar(&cadencePerWeek, "cadence-per-week", 0, "how many articles to write a week")
-	cmd.Flags().IntVar(&reviewHoldDays, "review-hold-days", 0, "days a draft waits for review before auto-publish")
-	cmd.Flags().BoolVar(&autoPublish, "auto-publish", false, "publish drafts once the review hold passes")
+	cmd.Flags().IntVar(&reviewHoldDays, "review-hold-days", 0, "days before its planned date that a picked keyword starts being written")
 	cmd.Flags().StringVar(&imageTier, "image-tier", "", "image quality: draft, standard, or best")
 	cmd.Flags().IntVar(&inBodyImages, "in-body-images", 0, "images generated inside the body")
 	cmd.Flags().IntVar(&minWords, "min-words", 0, "shortest article to write")
@@ -251,14 +269,8 @@ func newBlogSettingsTestWebsiteCmd(state *State) *cobra.Command {
 			}
 			printer := state.Printer()
 			return printer.Value(result, func() {
-				status := "-"
-				if result.Status != nil {
-					status = strconv.Itoa(*result.Status)
-				}
 				printer.Fields([][2]string{
-					{"ok", strconv.FormatBool(result.OK)},
-					{"status", status},
-					{"error", strOrDash(result.Error)},
+					{"status", strconv.Itoa(result.HTTPStatus)},
 				})
 			})
 		},
@@ -273,6 +285,7 @@ func newBlogKeywordsCmd(state *State) *cobra.Command {
 	}
 	cmd.AddCommand(
 		newBlogKeywordsListCmd(state),
+		newBlogKeywordsSuggestCmd(state),
 		newBlogKeywordsPlanCmd(state),
 		newBlogKeywordsAddCmd(state),
 		newBlogKeywordsUpdateCmd(state),
@@ -302,10 +315,11 @@ func keywordRow(keyword fopost.BlogKeyword) []string {
 		cpc,
 		strOrDash(keyword.Intent),
 		strOrDash(keyword.PlannedFor),
+		output.Truncate(strOrDash(keyword.FitReason), 48),
 	}
 }
 
-var keywordHeaders = []string{"id", "keyword", "status", "volume", "difficulty", "cpc", "intent", "planned"}
+var keywordHeaders = []string{"id", "keyword", "status", "volume", "difficulty", "cpc", "intent", "planned", "fit reason"}
 
 func newBlogKeywordsListCmd(state *State) *cobra.Command {
 	var status []string
@@ -345,6 +359,47 @@ func newBlogKeywordsListCmd(state *State) *cobra.Command {
 	return cmd
 }
 
+func newBlogKeywordsSuggestCmd(state *State) *cobra.Command {
+	var seeds []string
+	var prompt string
+	cmd := &cobra.Command{
+		Use:   "suggest",
+		Short: "Suggest search terms from the blog goal and topics; uses AI credits",
+		Long: "Suggest about ten search terms from the blog goal and topics; uses AI " +
+			"credits. Pass the current terms with --seed to refine them and --prompt to " +
+			"steer. Nothing is saved; pass the terms you keep to `blog keywords plan`.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			workspaceID, err := state.WorkspaceID("")
+			if err != nil {
+				return err
+			}
+			suggested, err := client.Blog.SuggestSeeds(cmd.Context(), workspaceID, &fopost.SuggestBlogSeedsRequest{
+				Seeds:  seeds,
+				Prompt: prompt,
+			})
+			if err != nil {
+				return err
+			}
+			printer := state.Printer()
+			return printer.Value(struct {
+				Seeds []string `json:"seeds"`
+			}{suggested}, func() {
+				for _, seed := range suggested {
+					printer.Line("%s", seed)
+				}
+			})
+		},
+	}
+	cmd.Flags().StringSliceVar(&seeds, "seed", nil, "a current term to refine; repeatable, up to 20")
+	cmd.Flags().StringVar(&prompt, "prompt", "", "what to steer the suggestions towards, up to 500 characters")
+	return cmd
+}
+
 func newBlogKeywordsPlanCmd(state *State) *cobra.Command {
 	var seeds []string
 	cmd := &cobra.Command{
@@ -352,7 +407,8 @@ func newBlogKeywordsPlanCmd(state *State) *cobra.Command {
 		Short: "Research keywords in the background; uses AI credits",
 		Long: "Research keywords in the background; uses AI credits. With no --seed the " +
 			"research starts from the topic in the settings. New keywords arrive as " +
-			"suggested; run `blog keywords list` to see them.",
+			"suggested and nothing is put on the calendar; run `blog keywords list` to " +
+			"see them and `blog keywords update <id> --status planned` to pick one.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			client, err := state.Client()
@@ -442,7 +498,7 @@ func newBlogKeywordsUpdateCmd(state *State) *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringVar(&status, "status", "", "suggested, planned, written, or dismissed")
+	cmd.Flags().StringVar(&status, "status", "", "suggested, planned, written, or dismissed; planned picks it for the next free date")
 	cmd.Flags().StringVar(&plannedFor, "planned-for", "", "the day to write it, as YYYY-MM-DD; empty clears it")
 	return cmd
 }
@@ -493,6 +549,7 @@ func newBlogArticlesCmd(state *State) *cobra.Command {
 		newBlogArticlesGetCmd(state),
 		newBlogArticlesEditCmd(state),
 		newBlogArticlesRegenerateCmd(state),
+		newBlogArticlesSubmitCmd(state),
 		newBlogArticlesPublishCmd(state),
 		newBlogArticlesRejectCmd(state),
 		newBlogArticlesDeleteCmd(state),
@@ -548,7 +605,7 @@ func newBlogArticlesListCmd(state *State) *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringSliceVar(&status, "status", nil, "queued, writing, draft, scheduled, publishing, published, failed, or rejected; repeatable")
+	cmd.Flags().StringSliceVar(&status, "status", nil, "queued, writing, draft, in_review, scheduled, publishing, published, failed, or rejected; repeatable")
 	cmd.Flags().IntVar(&limit, "limit", 0, "most articles to return")
 	return cmd
 }
@@ -679,8 +736,9 @@ func newBlogArticlesEditCmd(state *State) *cobra.Command {
 		Use:   "edit <article-id>",
 		Short: "Edit a draft; only the flags given are sent",
 		Long: "Edit a draft; only the flags given are sent. An article still being written " +
-			"or already published cannot be edited. --publish-at puts the draft on the " +
-			"calendar without publishing it now.",
+			"or already published cannot be edited. --publish-at puts an article that is " +
+			"in review on the calendar without publishing it now; a draft must be " +
+			"submitted first.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().NFlag() == 0 {
@@ -768,13 +826,40 @@ func newBlogArticlesRegenerateCmd(state *State) *cobra.Command {
 	}
 }
 
+func newBlogArticlesSubmitCmd(state *State) *cobra.Command {
+	return &cobra.Command{
+		Use:   "submit <article-id>",
+		Short: "Send a draft, failed or rejected article for approval",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			workspaceID, err := state.WorkspaceID("")
+			if err != nil {
+				return err
+			}
+			article, err := client.Blog.SubmitArticle(cmd.Context(), workspaceID, args[0])
+			if err != nil {
+				return err
+			}
+			printer := state.Printer()
+			return printer.Value(article, func() {
+				printer.Success("Submitted article %s for approval.", article.ID)
+			})
+		},
+	}
+}
+
 func newBlogArticlesPublishCmd(state *State) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
 		Use:   "publish <article-id>",
 		Short: "Publish an article to the configured target",
-		Long: "Publish an article to the configured target. The settings must name a " +
-			"target first; without one the API answers no_target.",
+		Long: "Publish an article to the configured target. The article must be in " +
+			"review; run `blog articles submit` on a draft first. The settings must name " +
+			"a target; without one the API answers no_target.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !yes {
@@ -808,7 +893,7 @@ func newBlogArticlesPublishCmd(state *State) *cobra.Command {
 func newBlogArticlesRejectCmd(state *State) *cobra.Command {
 	return &cobra.Command{
 		Use:   "reject <article-id>",
-		Short: "Reject a draft so it never auto-publishes",
+		Short: "Reject an article so it never publishes",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := state.Client()
