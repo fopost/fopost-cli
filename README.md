@@ -43,7 +43,7 @@ Grab the archive for your platform from the
 `checksums.txt`, and put `fopost` on your `PATH`:
 
 ```bash
-tar -xzf fopost_0.2.0_darwin_arm64.tar.gz
+tar -xzf fopost_0.3.0_darwin_arm64.tar.gz
 sudo mv fopost /usr/local/bin/
 fopost version
 ```
@@ -136,6 +136,10 @@ git log -1 --pretty=%s | \
 
 Nothing reaches a platform without `--publish`, an explicit `posts publish`, or
 a schedule you set.
+
+`--schedule queue` drops the post into the next free slot of the posting queue
+instead of a fixed time. `fopost queue slots` manages the weekly slots, and
+`fopost queue next` and `fopost queue preview` show when a queued post would go out.
 
 ## Scripting with `--json`
 
@@ -240,8 +244,9 @@ fopost accounts      list · get · rename · move · health · metrics · valid
                      x follow · unfollow
                      reddit subreddits · rules · flairs · set-default
 fopost account-groups list · get · create · rename · set-members · delete
-fopost posts         list · get · create · publish · cancel · delete
+fopost posts         list · get · create · publish · cancel · unpublish · delete
                      duplicate · preflight · deliveries
+fopost queue         slots (list · create · update · delete) · next · preview
 fopost media         list · limits · upload · delete
 fopost labels        list · create · delete
 fopost contacts      list · get · conversations · import · delete
@@ -255,12 +260,16 @@ fopost blog          settings get · set · rotate-secret · test-website
 fopost blogs         list · articles (list · get · create · update · delete)
                      products (list · update)
 fopost analytics     overview · top-posts · time-series · decay · frequency · timeline ·
-                     changes · collect-post · native-posts
+                     changes · collect-post · native-posts · inbox
 fopost automations   list · get · toggle · trigger · runs
+                     versions list · get · restore
 fopost webhooks      list · create · test · delete
+                     deliveries list · get · redeliver
+fopost connect-sessions create · get
 fopost activity      list · audit
 fopost x             post · search
-fopost ads           networks · tree · pause · resume · insights · leads · catalogs · library
+fopost ads           networks · tree · pause · resume · insights · leads · catalogs · library ·
+                     google · tracking
 fopost completion    bash · zsh · fish · powershell
 fopost version
 ```
@@ -348,3 +357,28 @@ fopost ads google query --connection c4d5e6f7-… --customer 1234567890 \
 
 `--customer` has to name an account the connection's grant reaches; any other answers
 404. The other `fopost ads` commands work across networks and dispatch by connection.
+
+### Ads tracking
+
+`fopost ads tracking` covers pixels, the Conversions API and custom conversions. Every
+pixel command names the connection and the ad account that owns the pixel; the ads scope
+is enough:
+
+```bash
+fopost ads tracking pixels list --connection c4d5e6f7-… --ad-account act_123
+fopost ads tracking pixels create --connection c4d5e6f7-… --ad-account act_123 --name "Site"
+fopost ads tracking pixels get 123 --connection c4d5e6f7-… --ad-account act_123 --code
+fopost ads tracking pixels stats 123 --connection c4d5e6f7-… --ad-account act_123
+fopost ads tracking pixels match-quality 123 --connection c4d5e6f7-… --ad-account act_123
+fopost ads tracking custom-conversions list --connection c4d5e6f7-… --ad-account act_123
+fopost ads tracking custom-conversions create --connection c4d5e6f7-… --ad-account act_123 \
+  --pixel 123 --name "Signed up" --event-type COMPLETE_REGISTRATION --url-contains /thanks
+fopost ads tracking custom-conversions delete 456 --connection c4d5e6f7-… --ad-account act_123
+fopost ads tracking conversions list --limit 20
+fopost ads tracking conversions send --connection c4d5e6f7-… --ad-account act_123 \
+  --pixel 123 --idempotency-key order-981 --events events.json
+```
+
+`conversions send` reads a JSON array of events from `--events` (a path, or `-` for stdin)
+and sends it exactly once per `--idempotency-key`: a key sent before answers replayed and
+sends nothing. Identity fields are hashed by the API and never stored.

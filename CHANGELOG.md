@@ -2,6 +2,26 @@
 
 All notable changes to the CLI are documented here. Releases are `v<version>` tags on `main`.
 
+## Unreleased
+
+### Added
+
+- `fopost ads tracking pixels list · get · create · stats · match-quality`, `custom-conversions list · create · delete` and `conversions list · send`. `conversions send` reads a JSON array of events from a file or stdin and sends it exactly once per `--idempotency-key`; `custom-conversions delete` confirms unless `--yes` is passed.
+- Requires `fopost-go` with `Ads.SendConversions` and the pixel and custom conversion methods (the pin in `go.mod` must be bumped once that SDK version is released).
+- `fopost accounts x follow · unfollow <account-id> --user-id <id>` follows or unfollows an X user as a connected account, and `fopost x post <post-id> --account <id>` and `fopost x search --account <id> --q <query> [--max-results N] [--next-token T]` read and search X posts with that account's token. Every call is an X API call metered to the workspace; an X account connected before this release must be reconnected for follow, repost and bookmark, or the API answers `409 reconnect_required`. Requires `fopost-go` with `FollowXUser`, `UnfollowXUser`, `GetXPost` and `SearchXPosts` (the `go.mod` pin must be bumped once that SDK version is released).
+
+## 0.3.0 - 2026-10-18
+
+### Added
+
+- `fopost queue slots list · create · update · delete`, `queue next` and `queue preview` manage the posting queue, and `posts create --schedule queue` drops a post into the next free slot.
+- `fopost posts unpublish` takes a live post down on every network; it confirms unless `--yes` is passed.
+- `fopost connect-sessions create · get` mints a hosted connect link for one of your users and reads its status.
+- `fopost webhooks deliveries list · get · redeliver` reads and replays a subscription's delivery log.
+- `fopost automations versions list · get · restore` walks an automation's saved graphs and restores one as a new version.
+- `fopost analytics inbox` prints the inbox roll-up.
+- Requires `fopost-go` 0.4.0 (`Queue`, `ConnectSessions`, `Posts.Unpublish`, webhook deliveries, automation versions, `Analytics.Inbox`); the pin in `go.mod` must be re-pointed at the tag once it is released.
+
 ## 0.2.0 - 2026-10-18
 
 ### Removed
@@ -10,7 +30,6 @@ All notable changes to the CLI are documented here. Releases are `v<version>` ta
 
 ### Added
 
-- `fopost accounts x follow · unfollow <account-id> --user-id <id>` follows or unfollows an X user as a connected account, and `fopost x post <post-id> --account <id>` and `fopost x search --account <id> --q <query> [--max-results N] [--next-token T]` read and search X posts with that account's token. Every call is an X API call metered to the workspace; an X account connected before this release must be reconnected for follow, repost and bookmark, or the API answers `409 reconnect_required`. Requires `fopost-go` with `FollowXUser`, `UnfollowXUser`, `GetXPost` and `SearchXPosts` (the `go.mod` pin must be bumped once that SDK version is released).
 - `fopost accounts reddit subreddits · rules · flairs · set-default` lists the subreddits an account can post to, a subreddit's rules and flairs, and sets the default subreddit; `r/webdev` and `webdev` both work, and `set-default --clear` falls back to the account's own profile page.
 - `fopost blogs list · articles (list · get · create · update · delete) · products (list · update)` reads and edits the articles and products a connected site already owns, addressed by the site's own ids; `articles update` changes the live article in place, and `articles delete` confirms unless `--yes` is passed.
 - `fopost blog keywords suggest` suggests search terms from the blog goal and topics (`--seed`, repeatable, and `--prompt`).
