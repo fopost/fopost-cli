@@ -2,7 +2,7 @@
 
 All notable changes to the CLI are documented here. Releases are `v<version>` tags on `main`.
 
-## Unreleased
+## 0.2.0 - 2026-10-18
 
 ### Removed
 
@@ -10,6 +10,8 @@ All notable changes to the CLI are documented here. Releases are `v<version>` ta
 
 ### Added
 
+- `fopost accounts reddit subreddits · rules · flairs · set-default` lists the subreddits an account can post to, a subreddit's rules and flairs, and sets the default subreddit; `r/webdev` and `webdev` both work, and `set-default --clear` falls back to the account's own profile page.
+- `fopost blogs list · articles (list · get · create · update · delete) · products (list · update)` reads and edits the articles and products a connected site already owns, addressed by the site's own ids; `articles update` changes the live article in place, and `articles delete` confirms unless `--yes` is passed.
 - `fopost blog keywords suggest` suggests search terms from the blog goal and topics (`--seed`, repeatable, and `--prompt`).
 - `fopost blog articles submit` sends a draft, failed or rejected article for approval. `blog articles publish` and `edit --publish-at` need the article in review.
 - `fopost blog settings set --goal --focus-topics --avoid-topics`; `settings get` shows the goal, the topics and the last plan run, and the keyword tables show the fit reason.
