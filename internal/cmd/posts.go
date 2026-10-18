@@ -26,6 +26,7 @@ func newPostsCmd(state *State) *cobra.Command {
 		newPostsCreateCmd(state),
 		newPostsPublishCmd(state),
 		newPostsCancelCmd(state),
+		newPostsUnpublishCmd(state),
 		newPostsDeleteCmd(state),
 		newPostsDuplicateCmd(state),
 		newPostsPreflightCmd(state),
@@ -178,6 +179,7 @@ type createOptions struct {
 	media      []string
 	files      []string
 	scheduleAt string
+	schedule   string
 	draft      bool
 	publish    bool
 	labels     []string
@@ -204,6 +206,7 @@ func newPostsCreateCmd(state *State) *cobra.Command {
 		Example: strings.Join([]string{
 			"  fopost posts create --account acc_1 --text \"Shipping today\" --publish",
 			"  fopost posts create --account acc_1 --text-file post.md --schedule-at \"2026-09-01 09:00\"",
+			"  fopost posts create --account acc_1 --text \"Next free slot\" --schedule queue",
 			"  git log -1 --pretty=%s | fopost posts create --account acc_1 --text-file - --draft",
 		}, "\n"),
 		Args: cobra.NoArgs,
@@ -219,6 +222,7 @@ func newPostsCreateCmd(state *State) *cobra.Command {
 	flags.StringArrayVar(&opts.media, "media", nil, "local file to upload and attach (repeatable)")
 	flags.StringArrayVar(&opts.files, "file", nil, "local file to send with the post (repeatable, up to 5)")
 	flags.StringVar(&opts.scheduleAt, "schedule-at", "", "when to publish, RFC 3339 or \"2026-09-01 09:00\" in local time")
+	flags.StringVar(&opts.schedule, "schedule", "", "\"queue\" to publish at the next free queue slot")
 	flags.BoolVar(&opts.draft, "draft", false, "save as a draft (the default when no schedule is given)")
 	flags.BoolVar(&opts.publish, "publish", false, "publish immediately after creating")
 	flags.StringArrayVar(&opts.labels, "label", nil, "label id to attach (repeatable)")
@@ -235,6 +239,12 @@ func runPostsCreate(cmd *cobra.Command, state *State, opts *createOptions) error
 	}
 	if opts.publish && opts.draft {
 		return usageErrorf("--publish and --draft are alternatives; pass one")
+	}
+	if opts.schedule != "" && opts.schedule != fopost.ScheduleQueue {
+		return usageErrorf("--schedule only accepts \"queue\"")
+	}
+	if opts.schedule != "" && (opts.scheduleAt != "" || opts.publish || opts.draft) {
+		return usageErrorf("--schedule queue is an alternative to --schedule-at, --publish, and --draft; pass one")
 	}
 
 	text, err := readText(opts.text, opts.textFile, state.In)
@@ -287,6 +297,10 @@ func runPostsCreate(cmd *cobra.Command, state *State, opts *createOptions) error
 	if scheduleAt != nil {
 		body.Status = fopost.PostStatusScheduled
 		body.ScheduleAt = scheduleAt
+	}
+	if opts.schedule == fopost.ScheduleQueue {
+		body.Status = fopost.PostStatusScheduled
+		body.Schedule = fopost.ScheduleQueue
 	}
 
 	files, closeFiles, err := openPostFiles(opts.files)
@@ -449,6 +463,43 @@ func newPostsCancelCmd(state *State) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringArrayVar(&accounts, "account", nil, "cancel only these account ids (repeatable)")
+	return cmd
+}
+
+func newPostsUnpublishCmd(state *State) *cobra.Command {
+	var yes bool
+	cmd := &cobra.Command{
+		Use:   "unpublish <post-id>",
+		Short: "Take a live post down on every network",
+		Long: "Deletes the post on every network it is live on; the post stays as a record.\n" +
+			"A network that cannot delete a live post refuses the whole call.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !yes {
+				if err := confirm(state, fmt.Sprintf("Unpublish post %s on every network? This cannot be undone.", args[0])); err != nil {
+					return err
+				}
+			}
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			result, err := client.Posts.Unpublish(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			printer := state.Printer()
+			return printer.Value(result, func() {
+				printer.Success("Unpublished %s on %d network(s). Post is %s.", args[0], len(result.Deliveries), output.Dash(result.PostStatus))
+				rows := make([][]string, 0, len(result.Deliveries))
+				for _, delivery := range result.Deliveries {
+					rows = append(rows, []string{delivery.AccountID, delivery.Platform, boolLabel(delivery.Removed, "removed", "kept")})
+				}
+				printer.Table([]string{"account id", "platform", "result"}, rows)
+			})
+		},
+	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")
 	return cmd
 }
 

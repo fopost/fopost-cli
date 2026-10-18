@@ -93,3 +93,11 @@ type deleted struct {
 	Deleted bool   `json:"deleted"`
 	ID      string `json:"id"`
 }
+
+// strValue reads an optional string the API may send as null.
+func strValue(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
