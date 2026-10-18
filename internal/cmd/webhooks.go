@@ -23,6 +23,7 @@ func newWebhooksCmd(state *State) *cobra.Command {
 		newWebhooksCreateCmd(state),
 		newWebhooksTestCmd(state),
 		newWebhooksDeleteCmd(state),
+		newWebhooksDeliveriesCmd(state),
 	)
 	return cmd
 }
@@ -165,4 +166,129 @@ func newWebhooksDeleteCmd(state *State) *cobra.Command {
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")
 	return cmd
+}
+
+func newWebhooksDeliveriesCmd(state *State) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "deliveries",
+		Aliases: []string{"delivery"},
+		Short:   "Read and replay a subscription's delivery log",
+	}
+	cmd.AddCommand(
+		newWebhooksDeliveriesListCmd(state),
+		newWebhooksDeliveriesGetCmd(state),
+		newWebhooksDeliveriesRedeliverCmd(state),
+	)
+	return cmd
+}
+
+func responseStatus(status *int) string {
+	if status == nil {
+		return ""
+	}
+	return itoa(*status)
+}
+
+func newWebhooksDeliveriesListCmd(state *State) *cobra.Command {
+	params := &fopost.ListWebhookDeliveriesParams{}
+	cmd := &cobra.Command{
+		Use:   "list <webhook-id>",
+		Short: "List recent delivery attempts, newest first",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			deliveries, err := client.Webhooks.ListDeliveries(cmd.Context(), args[0], params)
+			if err != nil {
+				return err
+			}
+			printer := state.Printer()
+			return printer.Value(deliveries, func() {
+				rows := make([][]string, 0, len(deliveries))
+				for _, delivery := range deliveries {
+					rows = append(rows, []string{
+						delivery.ID,
+						delivery.Event,
+						itoa(delivery.Attempt),
+						delivery.Status,
+						output.Dash(responseStatus(delivery.ResponseStatus)),
+						itoa(delivery.DurationMs) + "ms",
+						output.Stamp(delivery.CreatedAt.Time, delivery.CreatedAt.Raw),
+					})
+				}
+				printer.Table([]string{"id", "event", "attempt", "status", "response", "duration", "sent"}, rows)
+			})
+		},
+	}
+	cmd.Flags().StringVar(&params.Status, "status", "", "success or failed")
+	cmd.Flags().IntVar(&params.Limit, "limit", 0, "how many to show, 1 to 200 (the API defaults to 50)")
+	return cmd
+}
+
+func newWebhooksDeliveriesGetCmd(state *State) *cobra.Command {
+	return &cobra.Command{
+		Use:   "get <webhook-id> <delivery-id>",
+		Short: "Show one delivery attempt",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			delivery, err := client.Webhooks.GetDelivery(cmd.Context(), args[0], args[1])
+			if err != nil {
+				return err
+			}
+			printer := state.Printer()
+			return printer.Value(delivery, func() {
+				snippet := strValue(delivery.ResponseSnippet)
+				printer.Fields([][2]string{
+					{"ID", delivery.ID},
+					{"Webhook", delivery.WebhookID},
+					{"Event", delivery.Event},
+					{"Delivery key", delivery.DeliveryKey},
+					{"Attempt", itoa(delivery.Attempt)},
+					{"Status", delivery.Status},
+					{"Response", output.Dash(responseStatus(delivery.ResponseStatus))},
+					{"Duration", itoa(delivery.DurationMs) + "ms"},
+					{"Payload hash", delivery.PayloadHash},
+					{"Next retry", output.Stamp(delivery.NextRetryAt.Time, delivery.NextRetryAt.Raw)},
+					{"Sent", output.Stamp(delivery.CreatedAt.Time, delivery.CreatedAt.Raw)},
+				})
+				if snippet != "" {
+					printer.Line("")
+					printer.Line("%s", snippet)
+				}
+			})
+		},
+	}
+}
+
+type redelivered struct {
+	Redelivered bool   `json:"redelivered"`
+	WebhookID   string `json:"webhook_id"`
+	DeliveryID  string `json:"delivery_id"`
+}
+
+func newWebhooksDeliveriesRedeliverCmd(state *State) *cobra.Command {
+	return &cobra.Command{
+		Use:   "redeliver <webhook-id> <delivery-id>",
+		Short: "Send a delivery's event again as a new attempt",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := state.Client()
+			if err != nil {
+				return err
+			}
+			if err := client.Webhooks.Redeliver(cmd.Context(), args[0], args[1]); err != nil {
+				return err
+			}
+			printer := state.Printer()
+			return printer.Value(redelivered{Redelivered: true, WebhookID: args[0], DeliveryID: args[1]}, func() {
+				printer.Success("Queued delivery %s to be sent again.", args[1])
+			})
+		},
+	}
 }
