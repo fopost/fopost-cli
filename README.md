@@ -43,7 +43,7 @@ Grab the archive for your platform from the
 `checksums.txt`, and put `fopost` on your `PATH`:
 
 ```bash
-tar -xzf fopost_0.1.1_darwin_arm64.tar.gz
+tar -xzf fopost_0.2.0_darwin_arm64.tar.gz
 sudo mv fopost /usr/local/bin/
 fopost version
 ```
@@ -251,6 +251,8 @@ fopost knowledge     list · add · sync · delete · search
 fopost blog          settings get · set · rotate-secret · test-website
                      keywords list · suggest · plan · add · update · delete
                      articles list · request · get · edit · regenerate · submit · publish · reject · delete
+fopost blogs         list · articles (list · get · create · update · delete)
+                     products (list · update)
 fopost analytics     overview · top-posts · time-series · decay · frequency · timeline ·
                      changes · collect-post · native-posts
 fopost automations   list · get · toggle · trigger · runs
