@@ -237,6 +237,7 @@ fopost accounts      list · get · rename · move · health · metrics · valid
                      tiktok creator-info · music · locations · video
                      instagram audio · publishing-limit · stories
                      linkedin mentions
+                     x follow · unfollow
                      reddit subreddits · rules · flairs · set-default
 fopost account-groups list · get · create · rename · set-members · delete
 fopost posts         list · get · create · publish · cancel · delete
@@ -258,6 +259,7 @@ fopost analytics     overview · top-posts · time-series · decay · frequency 
 fopost automations   list · get · toggle · trigger · runs
 fopost webhooks      list · create · test · delete
 fopost activity      list · audit
+fopost x             post · search
 fopost ads           networks · tree · pause · resume · insights · leads · catalogs · library
 fopost completion    bash · zsh · fish · powershell
 fopost version
