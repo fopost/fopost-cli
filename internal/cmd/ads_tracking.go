@@ -581,3 +581,10 @@ func newConversionsSendCmd(state *State) *cobra.Command {
 	cmd.Flags().StringVar(&events, "events", "", "path to a JSON array of events, or - for stdin (required)")
 	return cmd
 }
+
+func strOrDash(s *string) string {
+	if s == nil {
+		return "-"
+	}
+	return output.Dash(*s)
+}
