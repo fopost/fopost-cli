@@ -254,9 +254,6 @@ fopost broadcasts    list · get · create · send · cancel · recipients · de
 fopost sequences     list · get · create · enroll · unenroll · enrollments · pause · resume · delete
                      fields list · fields delete
 fopost knowledge     list · add · sync · delete · search
-fopost blog          settings get · set · rotate-secret · test-website
-                     keywords list · suggest · plan · add · update · delete
-                     articles list · request · get · edit · regenerate · submit · publish · reject · delete
 fopost blogs         list · articles (list · get · create · update · delete)
                      products (list · update)
 fopost analytics     overview · top-posts · time-series · decay · frequency · timeline ·

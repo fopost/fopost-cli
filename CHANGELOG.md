@@ -4,6 +4,10 @@ All notable changes to the CLI are documented here. Releases are `v<version>` ta
 
 ## Unreleased
 
+### Removed
+
+- `fopost blog` (settings, keywords and articles) for the retired `/v1/blog` API. Articles are published as ordinary posts; `fopost blogs` for a connected site's own articles and products stays.
+
 ### Added
 
 - `fopost ads tracking pixels list · get · create · stats · match-quality`, `custom-conversions list · create · delete` and `conversions list · send`. `conversions send` reads a JSON array of events from a file or stdin and sends it exactly once per `--idempotency-key`; `custom-conversions delete` confirms unless `--yes` is passed.
