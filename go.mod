@@ -1,6 +1,6 @@
 module github.com/fopost/fopost-cli
 
-go 1.22
+go 1.25.0
 
 require (
 	github.com/fopost/fopost-go v0.3.1-0.20261018230109-e4735ddd1182
@@ -11,5 +11,5 @@ require (
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
-	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
 )

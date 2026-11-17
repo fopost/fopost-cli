@@ -48,7 +48,7 @@ sudo mv fopost /usr/local/bin/
 fopost version
 ```
 
-Requires Go 1.22 or newer to build from source. Prebuilt binaries cover macOS,
+Requires Go 1.25 or newer to build from source. Prebuilt binaries cover macOS,
 Linux, and Windows on both amd64 and arm64.
 
 ## Authenticate
