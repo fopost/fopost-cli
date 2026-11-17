@@ -107,9 +107,9 @@ The pin currently points at the head of the SDK's `feature/sdk-gaps` branch
 `analytics inbox` need. Re-point it at the `v0.4.0` tag once that PR merges and
 is tagged, or a `go get -u` will silently walk it backwards.
 
-`go.mod` declares `go 1.22`, which is why `golang.org/x/term` is pinned to
-`v0.27.0` — from `v0.34.0` it requires a newer toolchain. CI builds on 1.22 and
-on stable, so a dependency bump that raises the floor fails there first.
+`go.mod` declares `go 1.25.0`, the floor `golang.org/x/sys` v0.44.0 requires.
+`golang.org/x/term` stays pinned at `v0.27.0`. CI builds on 1.25 and on stable,
+so a dependency bump that raises the floor fails there first.
 
 ## Commands
 

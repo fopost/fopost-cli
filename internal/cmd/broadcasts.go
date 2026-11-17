@@ -215,9 +215,9 @@ func newBroadcastsSendCmd(state *State) *cobra.Command {
 			printer := state.Printer()
 			return printer.Value(sent, func() {
 				printer.Success("Sending to %d contacts.", sent.Recipients)
-				printer.Warn("Anyone whose messaging window has closed is skipped, " +
-					"so fewer may be messaged. Run `fopost broadcasts recipients " +
-					args[0] + " --status skipped` to see who.")
+				printer.Warn("Anyone whose messaging window has closed is skipped, "+
+					"so fewer may be messaged. Run `fopost broadcasts recipients %s "+
+					"--status skipped` to see who.", args[0])
 			})
 		},
 	}
