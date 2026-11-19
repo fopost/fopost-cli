@@ -97,15 +97,8 @@ Changing one is a breaking change for anyone's script.
 ## Parent dependency
 
 `github.com/fopost/fopost-go` is **published** to the Go module proxy, so CI
-resolves it normally with no shim. It is currently pinned to a pseudo-version
-because the SDK has no `v*` tag yet; once it is tagged, bump `go.mod` to the
-released version.
-
-The pin currently points at the head of the SDK's `feature/sdk-gaps` branch
-(fopost/fopost-go#38), which is what `fopost queue`, `posts unpublish`,
-`connect-sessions`, `webhooks deliveries`, `automations versions` and
-`analytics inbox` need. Re-point it at the `v0.4.0` tag once that PR merges and
-is tagged, or a `go get -u` will silently walk it backwards.
+resolves it normally with no shim. It is pinned to the released `v0.4.0` tag; bump
+it to the next SDK tag when a command needs a newer method.
 
 `go.mod` declares `go 1.25.0`, the floor `golang.org/x/sys` v0.44.0 requires.
 `golang.org/x/term` stays pinned at `v0.27.0`. CI builds on 1.25 and on stable,
