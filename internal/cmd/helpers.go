@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -71,6 +72,24 @@ func readAll(state *State) ([]byte, error) {
 		return nil, fmt.Errorf("reading stdin: %w", err)
 	}
 	return raw, nil
+}
+
+// readJSONFile decodes JSON from a file, or from stdin when the path is "-".
+func readJSONFile(state *State, path string, out any) error {
+	var raw []byte
+	var err error
+	if path == "-" {
+		raw, err = readAll(state)
+	} else {
+		raw, err = os.ReadFile(path)
+	}
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+	if err := json.Unmarshal(raw, out); err != nil {
+		return usageErrorf("%s is not valid JSON: %v", path, err)
+	}
+	return nil
 }
 
 // confirm asks before a destructive action. A non-interactive run must pass
