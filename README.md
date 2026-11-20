@@ -248,6 +248,9 @@ fopost posts         list · get · create · publish · cancel · unpublish · 
                      duplicate · preflight · deliveries
 fopost queue         slots (list · create · update · delete) · next · preview
 fopost media         list · limits · upload · delete
+fopost designs       list · get · create · duplicate · export · delete
+fopost fonts         list · upload · delete
+fopost video-edits   ops · create · get
 fopost labels        list · create · delete
 fopost contacts      list · get · conversations · import · delete
 fopost broadcasts    list · get · create · send · cancel · recipients · delete
