@@ -4,6 +4,13 @@ All notable changes to the CLI are documented here. Releases are `v<version>` ta
 
 ## Unreleased
 
+### Added
+
+- `fopost designs list · get · create · duplicate · export · delete` reads and saves designs, and `export` renders one into the media library as png, jpg, pdf, mp4 or gif; `delete` confirms unless `--yes` is passed.
+- `fopost fonts list · upload · delete` lists the font library with the workspace's uploads, uploads a font file, and removes one; `delete` confirms unless `--yes` is passed.
+- `fopost video-edits ops · create · get` runs edit jobs on a media library video. `create` takes `--op name` or `--op 'name={json params}'` (repeatable) or `--operations-file`, and `--wait` on `create` and `get` blocks until the job succeeds or fails, exiting 1 on a failed job.
+- Requires `fopost-go` with the Designs, Fonts and VideoEdits services (the pin in `go.mod` must be bumped once that SDK version is released).
+
 ## 0.3.0 - 2026-11-19
 
 ### Added
