@@ -11,6 +11,11 @@ All notable changes to the CLI are documented here. Releases are `v<version>` ta
 - `fopost video-edits ops · create · get` runs edit jobs on a media library video. `create` takes `--op name` or `--op 'name={json params}'` (repeatable) or `--operations-file`, and `--wait` on `create` and `get` blocks until the job succeeds or fails, exiting 1 on a failed job.
 - Requires `fopost-go` with the Designs, Fonts and VideoEdits services (the pin in `go.mod` must be bumped once that SDK version is released).
 
+### Removed
+
+- `fopost ads tree`, `fopost ads catalogs` and `fopost ads library`. The API no longer serves the account tree, product catalogs or the Ad Library.
+- `fopost ads google recommendations · optimization-score · keywords · keyword-ideas · search-terms · assets · asset-groups`. `fopost ads google conversions · query` stay.
+
 ## 0.3.0 - 2026-11-19
 
 ### Added

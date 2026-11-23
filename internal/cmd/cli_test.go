@@ -634,44 +634,6 @@ func TestAccountsMoveBlockedExitsWithAnError(t *testing.T) {
 	}
 }
 
-func TestAdsTreeSendsTheConnectionAndPrintsEveryLevel(t *testing.T) {
-	isolate(t)
-	var query string
-	api := newFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
-		query = r.URL.RawQuery
-		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
-			"adAccountId": "act_1",
-			"campaigns": []any{map[string]any{
-				"id": "c_1", "name": "Launch", "status": "ACTIVE", "budgetMinor": nil,
-				"adSets": []any{map[string]any{
-					"id": "s_1", "name": "US", "status": "ACTIVE", "budgetMinor": 5000,
-					"ads": []any{map[string]any{"id": "a_1", "name": "Hero", "status": "PAUSED"}},
-				}},
-			}},
-		}})
-	})
-	if err := config.Save(&config.File{APIKey: "fp_k", BaseURL: api.URL, Workspace: "ws_1"}); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, _, code := run(t, "", "ads", "tree", "act_1"); code != ExitUsage {
-		t.Fatalf("exit = %d without --connection, want %d", code, ExitUsage)
-	}
-	stdout, stderr, code := run(t, "", "ads", "tree", "act_1", "--connection", "conn_1")
-	if code != ExitOK {
-		t.Fatalf("exit = %d: %s", code, stderr)
-	}
-	api.find(t, http.MethodGet, "/ads/accounts/act_1/tree")
-	if query != "connection_id=conn_1&workspace_id=ws_1" {
-		t.Fatalf("query = %q", query)
-	}
-	for _, want := range []string{"c_1", "s_1", "a_1", "50.00"} {
-		if !strings.Contains(stdout, want) {
-			t.Fatalf("tree output is missing %q:\n%s", want, stdout)
-		}
-	}
-}
-
 func TestAdsPauseSendsEveryObjectWithItsLevel(t *testing.T) {
 	isolate(t)
 	api := newFakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
