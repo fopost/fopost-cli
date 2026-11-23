@@ -16,17 +16,14 @@ func init() { register(newAdsCmd) }
 func newAdsCmd(state *State) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ads",
-		Short: "Inspect campaigns and catalogs, change status, read insights, leads, the ad archive and ad comments, and track conversions",
+		Short: "Change status, read insights, leads and ad comments, and track conversions",
 	}
 	cmd.AddCommand(
 		newAdsNetworksCmd(state),
-		newAdsTreeCmd(state),
 		newAdsStatusCmd(state, "pause", fopost.AdStatusPaused),
 		newAdsStatusCmd(state, "resume", fopost.AdStatusActive),
 		newAdsInsightsCmd(state),
 		newAdsLeadsCmd(state),
-		newAdsCatalogsCmd(state),
-		newAdsLibraryCmd(state),
 		newAdsGoogleCmd(state),
 		newAdsTrackingCmd(state),
 		newAdsIdentitiesCmd(state),
@@ -104,51 +101,6 @@ func minorAmount(minor *int) string {
 		return "-"
 	}
 	return fmt.Sprintf("%d.%02d", *minor/100, *minor%100)
-}
-
-func newAdsTreeCmd(state *State) *cobra.Command {
-	var connection string
-	cmd := &cobra.Command{
-		Use:   "tree <ad-account-id>",
-		Short: "Show every campaign on an ad account with its ad sets and ads",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if connection == "" {
-				return usageErrorf("--connection is required")
-			}
-			client, err := state.Client()
-			if err != nil {
-				return err
-			}
-			resolved, err := state.Resolved()
-			if err != nil {
-				return err
-			}
-			tree, err := client.Ads.Tree(cmd.Context(), args[0], &fopost.AdObjectParams{
-				WorkspaceID:  resolved.Workspace,
-				ConnectionID: connection,
-			})
-			if err != nil {
-				return err
-			}
-			printer := state.Printer()
-			return printer.Value(tree, func() {
-				rows := [][]string{}
-				for _, campaign := range tree.Campaigns {
-					rows = append(rows, []string{"campaign", campaign.ID, output.Truncate(campaign.Name, 32), campaign.Status, minorAmount(campaign.BudgetMinor)})
-					for _, set := range campaign.AdSets {
-						rows = append(rows, []string{"  ad set", set.ID, output.Truncate(set.Name, 32), set.Status, minorAmount(set.BudgetMinor)})
-						for _, ad := range set.Ads {
-							rows = append(rows, []string{"    ad", ad.ID, output.Truncate(ad.Name, 32), ad.Status, "-"})
-						}
-					}
-				}
-				printer.Table([]string{"level", "id", "name", "status", "budget"}, rows)
-			})
-		},
-	}
-	cmd.Flags().StringVar(&connection, "connection", "", "Meta Ads connection id (required)")
-	return cmd
 }
 
 func newAdsStatusCmd(state *State, verb, status string) *cobra.Command {
